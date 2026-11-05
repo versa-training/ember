@@ -14,6 +14,8 @@ const WAKE_MESSAGE =
 
 const SLICE_MS = 5000;
 const STALE_MS = 60000;
+const TTL_RETRY_MS = 2000;
+const TTL_RETRIES = 10;
 
 function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -54,7 +56,18 @@ function main() {
   const state = readState(sessionId);
   if (!state) return 0;
   const startMs = Date.now();
-  const { ttl } = transcriptTail(payload.transcript_path);
+  let { ttl } = transcriptTail(payload.transcript_path);
+  // An interactive transcript can lack the current turn at Stop. Wait for it.
+  if (ttl === null && intervalOverride === null && state.wakes < maxWakes) {
+    const retryMs = intEnv('EMBER_TTL_RETRY_MS', TTL_RETRY_MS);
+    const retries = intEnv('EMBER_TTL_RETRIES', TTL_RETRIES);
+    for (let i = 0; i < retries && ttl === null; i += 1) {
+      sleep(retryMs);
+      const current = readState(sessionId);
+      if (!current || current.generation !== state.generation) return 0;
+      ttl = transcriptTail(payload.transcript_path).ttl;
+    }
+  }
   if (!shouldSleep({ ttl, intervalOverride, wakes: state.wakes, maxWakes })) return 0;
 
   const generation = state.generation + 1;

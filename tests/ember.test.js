@@ -300,3 +300,39 @@ test('the report skips dangling symlinks and filters requests by time', (t) => {
   assert.equal(analyze(root, 0).main.requests, 2);
   assert.equal(analyze(root, Date.now() - 30 * 86400000).main.requests, 1);
 });
+
+test('rewake waits for a transcript that gains its usage entry after Stop', async (t) => {
+  const dir = temporaryDir(t);
+  const transcript = path.join(dir, 't.jsonl');
+  fs.writeFileSync(transcript, '');
+  const env = { ...process.env, EMBER_STATE_DIR: dir, EMBER_TTL_RETRY_MS: '100', EMBER_TTL_RETRIES: '50' };
+  delete env.EMBER_MAIN_INTERVAL_SEC;
+  run('reset-on-prompt.js', { session_id: 's' }, env);
+  const before = JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).generation;
+  const child = require('node:child_process').spawn('node', [hook('rewake.js')], { env, stdio: ['pipe', 'ignore', 'ignore'] });
+  t.after(() => child.kill());
+  child.stdin.end(JSON.stringify({ session_id: 's', transcript_path: transcript }));
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).generation, before, 'still waiting');
+  fs.writeFileSync(transcript, `${assistant('m1', 0, write1h(0, 100), undefined, Date.now())}\n`);
+  let after = before;
+  for (let i = 0; i < 40 && after === before; i += 1) {
+    await new Promise((r) => setTimeout(r, 100));
+    after = JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).generation;
+  }
+  assert.equal(after, before + 1, 'a sleeper started once the lifetime was known');
+});
+
+test('rewake gives up and exits 0 when the usage entry never arrives', (t) => {
+  const dir = temporaryDir(t);
+  const transcript = path.join(dir, 't.jsonl');
+  fs.writeFileSync(transcript, '');
+  const env = { EMBER_STATE_DIR: dir, EMBER_TTL_RETRY_MS: '50', EMBER_TTL_RETRIES: '4', EMBER_MAIN_INTERVAL_SEC: '' };
+  run('reset-on-prompt.js', { session_id: 's' }, env);
+  const before = JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).generation;
+  const started = Date.now();
+  const result = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
+  assert.equal(result.status, 0);
+  assert.ok(Date.now() - started >= 200, 'waited the retries');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).generation, before);
+});
