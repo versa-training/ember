@@ -10,7 +10,7 @@ const test = require('node:test');
 const { decide, DEFAULT_CAP_MS } = require('../hooks/cap-subagent-wait');
 const { shouldSleep } = require('../hooks/rewake');
 const { lastCacheTtl } = require('../hooks/warmcache-lib');
-const { parseTranscript, addTranscript, emptyTotals } = require('../scripts/cache-report');
+const { parseTranscript, addTranscript, emptyTotals, missRate5m, whatIf } = require('../scripts/cache-report');
 
 const hook = (name) => path.join(__dirname, '..', 'hooks', name);
 const temporaryDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-test-'));
@@ -134,4 +134,16 @@ test('skips models without a listed price', () => {
   const totals = emptyTotals();
   addTranscript(totals, parseTranscript(assistant('a', 0, write5m(0, 100), 'other-model')), false, new Set());
   assert.equal(totals.requests, 0);
+});
+
+test('5-minute what-if applies the measured miss rate as an expected value', () => {
+  const expected = [[5, 0.119], [5.4, 0.119], [5.5, 0.775], [6, 0.865], [7, 0.991], [8, 0.993], [10, 0.995], [90, 0.995]];
+  for (const [gap, rate] of expected) assert.equal(missRate5m(gap), rate);
+  const price = { read: 0.2, write5m: 5, write1h: 8 };
+  const use = { read: 100000, create: 1000 };
+  const miss = (101000 * 5) / 1e6;
+  const hit = (100000 * 0.2 + 1000 * 5) / 1e6;
+  const cost = whatIf(price, use, 6.5, 100000, '5m');
+  assert.ok(Math.abs(cost - (0.865 * miss + 0.135 * hit)) < 1e-12);
+  assert.ok(Math.abs(whatIf(price, use, 2, 100000, '5m') - hit) < 1e-12);
 });

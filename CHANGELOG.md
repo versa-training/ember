@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Cost report: the 5-minute what-if applies the measured miss rate by gap length instead of treating every gap of 5 minutes or more as a full rewrite.
+- Add docs/pricing-math.md.
+- README figures corrected.
+
 ## 0.1.0
 
 - Cost report: `/warmcache:report` and `scripts/cache-report.js`.

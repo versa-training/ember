@@ -14,13 +14,17 @@ Find out what expired prompt caches cost you in Claude Code, and keep them warm 
 
 ![The three bills](assets/2-three-bills.png)
 
-| Scenario | Total |
-| --- | --- |
-| Everything on 5 minutes | $14,116.50 |
-| Main 1 hour, subagents 5 minutes | $10,981.32 |
-| Everything on 1 hour | $10,954.78 |
+About a third of the cost on this machine was cache expiries: 33.0% of total spend (range 32.1% to 35.0% depending on the expiry assumption).
 
-Simulated from one heavy multi-agent machine: 157,267 requests from 2026-09-29 to 2026-11-05, API list prices, not a real bill. The same requests and pauses are assumed in every row. Run the report for your own numbers, because yours will differ.
+| Scenario | Main | Subagents | Total |
+| --- | --- | --- | --- |
+| Everything on 5 minutes | $7,127.03 | $6,417.45 (measured) | $13,544.48 |
+| Main 1 hour, subagents 5 minutes (actual use here) | $4,377.05 | $6,417.45 (measured) | $10,794.50 |
+| Everything on 1 hour | $4,377.05 | $6,558.98 | $10,936.03 |
+
+Cache expiries cost $4,468.12 on 5 minutes (33.0%) and $1,448.41 on the actual setup (13.4%). Simulated keepalive on the actual setup: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned).
+
+Simulated from one heavy multi-agent machine: 157,267 requests from 2026-09-29 to 2026-11-05, API list prices, not a real bill. Unmarked values are simulated. The same requests and pauses are assumed in every row. Run the report for your own numbers, because yours will differ. The arithmetic is in [docs/pricing-math.md](docs/pricing-math.md).
 
 ## The other side
 
@@ -32,7 +36,7 @@ Anthropic's [reply](https://github.com/anthropics/claude-code/issues/46829#issue
 
 This report charges every write at the lifetime's price, so one-shot requests are counted.
 
-On this data, subagents are close to a wash: $6,571.62 on 5 minutes vs. $6,545.08 on 1 hour in simulation, against $6,417.45 actually spent. That supports per-request selection. The main agent saves far more on 1 hour on this workload: $7,544.88 vs. $4,409.70.
+On this data, 76.8% of main agents and 86.4% of subagents never hit a pause of 5 to 60 minutes. For those, 5 minutes is the right choice, which agrees with Anthropic's argument. Agents with 4 or more pauses are where 1 hour wins: main agents $6,413.58 on 5 minutes vs. $3,593.25 on 1 hour, subagents $1,238.51 vs. $703.36. Over all subagents the two lifetimes are close: $6,417.45 measured on 5 minutes vs. $6,558.98 simulated on 1 hour. The main agent saves far more on 1 hour: $7,127.03 vs. $4,377.05.
 
 Anthropic's claim covers all users, which this data cannot test. bcherny also wrote that the savings are "nowhere near 12x" and "a small win".
 
@@ -50,7 +54,7 @@ Subscription users: wakes use plan quota, how quota weights cached reads is unkn
 ## How it works
 
 - **Subagent hook.** A PreToolUse hook denies foreground Bash timeouts above 270 seconds in subagents. It does not shorten them, because a test showed a shortened timeout killed the command with exit code 143. The denial tells the subagent to rerun in the background.
-- **Stop hook.** A Stop hook with `asyncRewake` sleeps 59 minutes, then wakes the session for a one-word turn. It wakes at most 4 times between real prompts, and only when the last cache write was 1 hour. Each wake is a real turn in the transcript.
+- **Stop hook.** A Stop hook with `asyncRewake` sleeps 59 minutes, then wakes the session for a one-word turn. It wakes at most 4 times between real prompts, and only when the last cache write was 1 hour. Each wake is a real turn in the transcript. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with a check-in every 4:30 while waiting. See [docs/pricing-math.md](docs/pricing-math.md).
 
 ## Test status
 

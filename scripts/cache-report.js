@@ -67,14 +67,38 @@ function emptyTotals() {
   };
 }
 
+// Measured share of 5-minute caches that expired, by minutes since the previous request.
+const MISS_RATE_5M = [
+  { below: 5.5, rate: 0.119 },
+  { below: 6, rate: 0.775 },
+  { below: 7, rate: 0.865 },
+  { below: 8, rate: 0.991 },
+  { below: 10, rate: 0.993 },
+  { below: Infinity, rate: 0.995 },
+];
+
+function missRate5m(gap) {
+  return MISS_RATE_5M.find((band) => gap < band.below).rate;
+}
+
 // Prices a request as if every cache on this agent had the given lifetime.
+// A 5-minute cache after a gap of 5 minutes or more is priced as an expected value:
+// a miss rewrites the whole prefix, a hit reads the context and writes the rest.
 function whatIf(price, use, gap, context, ttl) {
   const writePrice = ttl === '1h' ? price.write1h : price.write5m;
   const prefix = use.read + use.create;
-  if (gap !== null && gap >= (ttl === '1h' ? 60 : 5) && context > MINIMUM_CONTEXT) return (prefix * writePrice) / 1e6;
-  if (gap !== null && gap >= 5 && use.read < 0.5 * context && context > MINIMUM_CONTEXT) {
+  if (ttl === '1h') {
+    if (gap !== null && gap >= 60 && context > MINIMUM_CONTEXT) return (prefix * writePrice) / 1e6;
+    if (gap !== null && gap >= 5 && use.read < 0.5 * context && context > MINIMUM_CONTEXT) {
+      const kept = Math.min(context, prefix);
+      return ((kept * price.read) + ((prefix - kept) * writePrice)) / 1e6;
+    }
+  } else if (gap !== null && gap >= 5 && context > MINIMUM_CONTEXT) {
+    const rate = missRate5m(gap);
     const kept = Math.min(context, prefix);
-    return ((kept * price.read) + ((prefix - kept) * writePrice)) / 1e6;
+    const miss = prefix * writePrice;
+    const hit = (kept * price.read) + ((prefix - kept) * writePrice);
+    return ((rate * miss) + ((1 - rate) * hit)) / 1e6;
   }
   return ((use.read * price.read) + (use.create * writePrice)) / 1e6;
 }
@@ -220,4 +244,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { parseTranscript, addTranscript, emptyTotals, priceFor, format };
+module.exports = { missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format };
