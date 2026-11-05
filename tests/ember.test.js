@@ -60,10 +60,10 @@ test('the cap hook prints valid hook output and can be turned off', () => {
   assert.equal(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '0' }).stdout, '');
 });
 
-test('sleeps only on a known 1-hour cache and below the wake limit', () => {
+test('sleeps on a known 5-minute or 1-hour cache and below the wake limit', () => {
   const base = { intervalOverride: null, wakes: 0, maxWakes: 4 };
   assert.equal(shouldSleep({ ...base, ttl: '1h' }), true);
-  assert.equal(shouldSleep({ ...base, ttl: '5m' }), false);
+  assert.equal(shouldSleep({ ...base, ttl: '5m' }), true);
   assert.equal(shouldSleep({ ...base, ttl: null }), false);
   assert.equal(shouldSleep({ ...base, ttl: '1h', wakes: 4 }), false);
 });
@@ -152,11 +152,11 @@ test('5-minute what-if applies the measured miss rate as an expected value', () 
   assert.ok(Math.abs(whatIf(price, use, 2, 100000, '5m') - hit) < 1e-12);
 });
 
-test('the cap hook stands down when its instruction cannot be followed or its reason is false', () => {
+test('the cap hook stands down when background tasks are disabled or the timeout is under the 1-hour interval', () => {
   const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x', timeout: 590000 } };
   assert.equal(decide(payload, DEFAULT_CAP_MS, { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '1' }), null);
   assert.equal(decide(payload, DEFAULT_CAP_MS, { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: 'true' }), null);
-  assert.equal(decide(payload, DEFAULT_CAP_MS, { CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '1h' }), null);
+  assert.equal(decide(payload, 3540000, {}), null);
   assert.notEqual(decide(payload, DEFAULT_CAP_MS, { CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: '0', CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL: '5m' }), null);
 });
 

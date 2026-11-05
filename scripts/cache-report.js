@@ -189,10 +189,10 @@ function addTranscript(totals, requests, isSubagent, seen) {
         const writePrice = writes ? writeCost / writes : (ttl === '1h' ? price.write1h : price.write5m) / 1e6;
         const rewritten = miss ? Math.min(Math.max(0, context - use.read), use.create) : 0;
         const extra = rewritten * (writePrice - price.read / 1e6);
-        // The plugin wakes a main agent only while its cache lifetime is 1 hour.
+        // The plugin wakes a main agent on either lifetime, up to the wake limit.
         const plan = isSubagent
           ? wakePlan(gap, { threshold: TTL_MIN['5m'], interval: SUBAGENT_WAKE_MIN })
-          : wakePlan(gap, { threshold: TTL_MIN[ttl], interval: MAIN_WAKE_MIN[ttl], limit: ttl === '1h' ? MAIN_MAX_WAKES : 0 });
+          : wakePlan(gap, { threshold: TTL_MIN[ttl], interval: MAIN_WAKE_MIN[ttl], limit: MAIN_MAX_WAKES });
         const { needed, wakes } = plan;
         totals.wakes += wakes;
         totals.wakeCost += wakes * wakeCost(price, context, ttl);
@@ -206,7 +206,7 @@ function addTranscript(totals, requests, isSubagent, seen) {
     }
     if (price) previous = { ...use, time: request.time };
   }
-  if (!isSubagent && previous && lastTtl === '1h') {
+  if (!isSubagent && previous) {
     const lastPrice = priceFor(requests[requests.length - 1].model, promptTokensOf(previous));
     if (lastPrice) {
       totals.abandonedWakeCost += MAIN_MAX_WAKES * (((previous.read + previous.create) * lastPrice.read) / 1e6);

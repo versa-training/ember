@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { parseTranscript, usageOf } = require('./cache-report');
+const config = require('../hooks/ember-config');
 
 const PLUGIN_ROOT = path.join(__dirname, '..');
 const RELEVANT = /^(CLAUDE_CODE_|ANTHROPIC_|EMBER_|DISABLE_PROMPT_CACHING|ENABLE_PROMPT_CACHING)/;
@@ -68,12 +69,22 @@ function recentLifetime(root, days = 2) {
   return { newest: writes[0].use.write1h > 0 ? '1h' : '5m', newestAt: new Date(writes[0].time).toISOString(), count: writes.length, share1h };
 }
 
-function settingValue(name) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8'))[name];
-  } catch {
-    return undefined;
-  }
+// Resolved lifetime, interval, and wake limit per agent type, each with its source.
+function resolvedLines(lifetime, env = process.env, cwd = process.cwd()) {
+  const main = config.mainLifetime({ env, cwd, transcriptTtl: lifetime ? lifetime.newest : null });
+  const mainInterval = config.mainInterval(main.ttl, env);
+  const wakes = config.maxWakes(env);
+  const sub = config.subagentLifetime({ env, cwd });
+  const wait = config.subagentWait(sub.ttl, env);
+  return [
+    'resolved by ember:',
+    `  main agent lifetime: ${main.ttl ?? 'unknown (no wakes until a cache write shows it)'} (${main.source})`,
+    `  main agent wake interval: ${mainInterval.seconds ?? 'none'} seconds (${mainInterval.source})`,
+    `  main agent wake limit: ${wakes.value} (${wakes.source})`,
+    `  subagent lifetime: ${sub.ttl} (${sub.source})`,
+    `  subagent foreground Bash limit: ${wait.ms / 1000} seconds (${wait.source})`,
+    `  subagent wake limit: not applicable, subagents are not woken`,
+  ];
 }
 
 function main() {
@@ -89,7 +100,7 @@ function main() {
     lifetime
       ? `cache lifetime in transcripts of the last 2 days: newest write ${lifetime.newest} at ${lifetime.newestAt}; ${lifetime.count} writes, ${(lifetime.share1h * 100).toFixed(1)}% of written tokens at 1h`
       : 'cache lifetime in transcripts of the last 2 days: no cache writes found',
-    `settings.json promptCacheTtl: ${settingValue('promptCacheTtl') ?? 'unset'}, subagentPromptCacheTtl: ${settingValue('subagentPromptCacheTtl') ?? 'unset'}`,
+    ...resolvedLines(lifetime),
     'environment:',
     ...(shown.length ? shown.map((line) => `  ${line}`) : ['  none of the relevant variables are set']),
     ...(hidden.length ? [`  left out (secret-looking names): ${hidden.join(', ')}`] : []),
@@ -100,4 +111,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { envLines, recentLifetime };
+module.exports = { envLines, recentLifetime, resolvedLines };

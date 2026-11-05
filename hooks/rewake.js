@@ -1,16 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
-// Stop hook, run with asyncRewake. Sleeps just under the 1-hour cache lifetime,
+// Stop hook, run with asyncRewake. Sleeps just under the cache lifetime (5 minutes or 1 hour),
 // then exits 2 to wake the idle session for one short turn. A newer Stop or a
 // user prompt bumps the generation, so a sleeper that is out of date exits quietly.
 
 const { readStdin, intEnv, isOff, readState, writeState, transcriptTail } = require('./ember-lib');
+const config = require('./ember-config');
 
-const DEFAULT_INTERVAL_SEC = 3540;
-const DEFAULT_MAX_WAKES = 4;
-const WAKE_MESSAGE =
-  'ember keepalive: this turn only keeps the prompt cache warm. Reply with the single word ok. Do not use tools.';
+const WAKE_MESSAGE = config.DEFAULT_WAKE_MESSAGE;
 
 const SLICE_MS = 5000;
 const STALE_MS = 60000;
@@ -37,7 +35,7 @@ function isStale(nowMs, deadlineMs) {
 
 function shouldSleep({ ttl, intervalOverride, wakes, maxWakes }) {
   if (wakes >= maxWakes) return false;
-  return intervalOverride !== null || ttl === '1h';
+  return intervalOverride !== null || ttl === '1h' || ttl === '5m';
 }
 
 function main() {
@@ -52,11 +50,13 @@ function main() {
   if (!sessionId || payload.agent_id) return 0;
 
   const intervalOverride = intEnv('EMBER_MAIN_INTERVAL_SEC', null);
-  const maxWakes = intEnv('EMBER_MAX_WAKES', DEFAULT_MAX_WAKES);
+  const maxWakes = config.maxWakes().value;
   const state = readState(sessionId);
   if (!state) return 0;
   const startMs = Date.now();
-  let { ttl } = transcriptTail(payload.transcript_path);
+  const settingsCwd = payload.cwd || process.cwd();
+  let lifetime = config.explicitMainLifetime();
+  let ttl = lifetime ? lifetime.ttl : transcriptTail(payload.transcript_path).ttl;
   // An interactive transcript can lack the current turn at Stop. Wait for it.
   if (ttl === null && intervalOverride === null && state.wakes < maxWakes) {
     const retryMs = intEnv('EMBER_TTL_RETRY_MS', TTL_RETRY_MS);
@@ -68,11 +68,13 @@ function main() {
       ttl = transcriptTail(payload.transcript_path).ttl;
     }
   }
+  if (!lifetime) lifetime = config.mainLifetime({ cwd: settingsCwd, transcriptTtl: ttl });
+  ttl = lifetime.ttl;
   if (!shouldSleep({ ttl, intervalOverride, wakes: state.wakes, maxWakes })) return 0;
 
   const generation = state.generation + 1;
   if (!writeState(sessionId, { ...state, generation })) return 0;
-  const deadline = deadlineFor(startMs, intervalOverride ?? DEFAULT_INTERVAL_SEC);
+  const deadline = deadlineFor(startMs, config.mainInterval(ttl).seconds);
   while (Date.now() < deadline) {
     sleep(Math.min(SLICE_MS, deadline - Date.now()));
     const current = readState(sessionId);
@@ -83,7 +85,7 @@ function main() {
   const latest = readState(sessionId);
   if (!latest || latest.generation !== generation) return 0;
   if (!writeState(sessionId, { ...latest, wakes: latest.wakes + 1, pendingWakeAt: Date.now() })) return 0;
-  process.stderr.write(`${WAKE_MESSAGE}\n`);
+  process.stderr.write(`${config.wakeMessage()}\n`);
   return 2;
 }
 
