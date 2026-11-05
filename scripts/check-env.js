@@ -94,7 +94,7 @@ function resolvedLines(lifetime, env = process.env, cwd = process.cwd()) {
 function main() {
   const version = run('claude', ['--version']);
   const validate = run('claude', ['plugin', 'validate', PLUGIN_ROOT]);
-  const lifetime = recentLifetime(path.join(os.homedir(), '.claude', 'projects'));
+  const lifetime = recentLifetime(process.env.EMBER_TRANSCRIPT_ROOT || path.join(os.homedir(), '.claude', 'projects'));
   const { shown, hidden } = envLines(process.env);
   const out = [
     `date: ${new Date().toISOString()}`,

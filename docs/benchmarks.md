@@ -31,6 +31,10 @@ Flags: `--days N` (default 30, 0 reads everything and can take minutes on large 
 
 Every figure is simulated at API list prices. On a subscription, dollars are an equivalent, not a bill.
 
+## Configuration the simulation assumes
+
+The simulated wake rows use the plugin defaults: an interval of 270 seconds on a 5-minute lifetime and 3540 seconds on a 1-hour lifetime, and a limit of 4 for the main agent (set `EMBER_MAX_WAKES` to change it). Both scripts share one `wakePlan`, so the main agent on a 5-minute cache is simulated with wakes in `cache-report.js` too. The lifetime of each request comes from the transcript. The configuration that `check-env.js` resolves is not used to rewrite history.
+
 ## Limits
 
 - Nothing is measured. The same requests and pauses are assumed in every mode, so a changed lifetime that would change your behavior is not modeled.

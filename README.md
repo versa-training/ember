@@ -4,7 +4,7 @@
 
 **Your coding agent's memory goes cold while it waits. ember keeps it warm, powered by [versa](https://versa.training)**
 
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.2.1-blue?style=flat-square" alt="version"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.0-blue?style=flat-square" alt="version"></a>
 <a href="#find-out-what-it-costs-you"><img src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square" alt="Claude Code plugin"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT license"></a>
 
@@ -102,8 +102,8 @@ Two small hooks.
 
 | Hook | Who it helps | What it does |
 | --- | --- | --- |
-| Subagent hook | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30 |
-| Wake hook | Your main agent on a 1-hour cache | A wake just before the cache expires, at 59 minutes, at most 4 between your prompts |
+| Subagent hook | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30. On a 1-hour subagent cache the limit is 59 minutes |
+| Wake hook | Your main agent, on a 5-minute or 1-hour cache | A wake just before the cache expires (4:30 or 59 minutes), at most 4 between your prompts |
 
 **The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). The hooks add less: a net $1,084.76 (simulated).
 
@@ -134,6 +134,26 @@ Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write 
 
 ## Configuration
 
+ember reads the cache lifetime from your Claude Code configuration on every hook call, separately for the main agent and for subagents. Nothing is stored. Leave the `EMBER_*` lifetime overrides unset: they exist for testing.
+
+**Main agent lifetime**, first match:
+
+1. `EMBER_MAIN_TTL` (`5m` or `1h`, for testing)
+2. The newest cache write in the transcript, because it is what happened
+3. `FORCE_PROMPT_CACHING_5M=1`
+4. `CLAUDE_CODE_PROMPT_CACHE_TTL`, in the environment, then in the `env` block of a settings file
+5. `promptCacheTtl` in a settings file
+6. `ENABLE_PROMPT_CACHING_1H=1`
+7. Unknown: the plan decides the default, so ember waits for the first cache write
+
+**Subagent lifetime**, first match: `EMBER_SUBAGENT_TTL`, `FORCE_PROMPT_CACHING_5M=1`, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `subagentPromptCacheTtl`, `ENABLE_PROMPT_CACHING_1H=1`, then `5m`. A `cacheTtl` in a subagent's frontmatter is not read.
+
+Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.claude/settings.local.json`, `<cwd>/.claude/settings.json`, `~/.claude/settings.json`. Files are read again on every call. A missing or malformed file is skipped, and a value other than `5m` or `1h` is ignored.
+
+**Intervals** follow the lifetime: 5 minutes gives 270 seconds, 1 hour gives 3540 seconds. A sleeping wake hook resolves the lifetime again about once a minute and just before it wakes. If you change a settings file while it sleeps, the deadline moves, counted from the hook's start. Limit: a hook keeps the environment it started with, so a variable changed during a session is not seen. Settings files are.
+
+`node scripts/check-env.js` prints the lifetime, interval, and wake limit per agent type with the source of each value. When the transcript and the configuration disagree, it says so.
+
 <details>
 <summary>Environment variables</summary>
 
@@ -141,10 +161,13 @@ Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write 
 | --- | --- | --- |
 | `EMBER_MAIN=0` | on | Turns off the Stop hook wakes |
 | `EMBER_SUBAGENT=0` | on | Turns off the subagent hook |
-| `EMBER_SUBAGENT_WAIT_MS` | 270000 | Longest foreground Bash timeout a subagent may use |
-| `EMBER_MAIN_INTERVAL_SEC` | 3540 | Seconds between wakes. Setting it skips the 1-hour check, and a headless run may then wait for a pending sleeper before it exits |
+| `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL` | unset | Test overrides of the resolved lifetime (`5m` or `1h`). Leave them unset |
+| `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | Longest foreground Bash timeout a subagent may use. Overrides exactly |
+| `EMBER_MAIN_INTERVAL_SEC` | from the lifetime: 270 or 3540 | Seconds between wakes. Overrides exactly. Setting it skips the transcript wait, and a headless run may then wait for a pending sleeper before it exits |
 | `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets |
+| `EMBER_WAKE_MESSAGE` | `ember keepalive: ...` | Text of the wake turn |
 | `EMBER_STATE_DIR` | `~/.claude/ember` | Where wake state is stored. It must be a real directory you own, not a symlink, or the hooks do nothing |
+| `EMBER_LOG`, `EMBER_RESOLVE_MS`, `EMBER_TRANSCRIPT_ROOT` | unset | Testing aids: a file that records each sleeper deadline, the re-resolve period in milliseconds, and the folder `check-env.js` reads transcripts from |
 
 </details>
 
@@ -157,7 +180,7 @@ Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write 
 
 ## How it works
 
-The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout above 270 seconds and tells the subagent to rerun in the background. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps 59 minutes, then wakes the session for a one-word turn, which is a real turn in your transcript.
+The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout above the subagent's interval (270 seconds on a 5-minute cache) and tells the subagent to rerun in the background and keep polling. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
 
 <details>
 <summary>Hook details and test status</summary>
@@ -165,13 +188,14 @@ The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout ab
 **Subagent hook**
 
 - It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed.
-- It does nothing when `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` is `1h`, because the reason would be false.
-- A `subagentPromptCacheTtl` setting of `1h` is not detected, so set `EMBER_SUBAGENT=0` then.
+- On a 1-hour subagent lifetime the limit is 3540 seconds, so it effectively never denies.
+- The deny text includes a polling command, because a call that starts with `sleep` is rejected by Claude Code and a subagent that ends its turn waits for the finish notification without a request.
+- A foreground subagent that runs longer than the main agent's lifetime cannot be helped: the main agent is inside one turn, so no Stop hook fires and its cache expires.
 - It denies the call and does not shorten it, because a test showed a shortened timeout killed the command with exit code 143.
 
 **Wake hook**
 
-- It wakes at most 4 times before the limit resets, and only when the last cache write was 1 hour.
+- It wakes at most 4 times before the limit resets, on a 5-minute or 1-hour main lifetime. A subagent cannot be woken by a hook: a hook wake goes to the main session only (tested).
 - The limit resets on every `UserPromptSubmit` event. The Claude Code docs say that event also fires on some turns Claude Code starts on its own, so the limit can reset on those too. This is untested.
 - The sleep ends one interval after the hook starts, because the transcript at Stop can lack the current turn. A final response that streams for more than 60 seconds can therefore let the cache expire before the wake (about 0.13% of final turns on the reference workload).
 - A newer Stop or prompt ends the sleep within about 5 seconds.
@@ -186,9 +210,17 @@ The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout ab
 - An interactive session with a short interval showed 4 wakes and the limit of 4 held. The UI displays each wake as "Stop hook feedback".
 - Wake timing, 2.1.310, interactive, interval 60 seconds: before 0.1.3 the second wake came 1 second after the first, because the transcript at Stop lacked the current turn. After the fix the hooks started 60.9 and 60.8 seconds apart. One run each.
 
-**Not yet confirmed.** The real 59-minute interval test is in progress.
+**Live tests of 0.3.0.** Claude Code 2.1.310, haiku, headless stream-json, 5-minute lifetime, the real 270-second interval, one run each. Tables: `results` in the ember-test repository.
 
-**Untested.** Laptop suspend, `/clear` with a pending sleeper, and whether the 1-hour check works in an interactive session, because setting the interval skips it.
+- Main idle 17 minutes with a limit of 3: 3 wakes at 272, 271, and 271 seconds after the previous request, each a cache hit, then none. With `EMBER_MAIN=0`, no wake in 11 minutes.
+- Subagent, ember on: the foreground call with a 600000 ms timeout was denied. With the first two versions of the deny text the subagent reran in the background and then ended its turn, so its next request came 471 and 475 seconds later with a full rewrite. With the current text it polled with gaps of 241 and 238 seconds, all cache hits, and the task finished. Three runs, so this depends on the model following the text.
+- Subagent, `EMBER_SUBAGENT=0`: the foreground call ran 482 seconds and the next request rewrote the full context (cache read 0).
+- Main waiting on a background subagent: the main wake fired at 272 seconds as a cache hit while the subagent ran, and the finish notification woke the main agent normally. The idle background subagent expired its own cache (gap 353 seconds, full rewrite).
+- A foreground subagent longer than 5 minutes: the main agent's next request came 489 seconds later with a full rewrite, because no Stop hook fires during a turn.
+- Configuration: with both lifetimes at `1h`, `check-env.js` and the first sleeper deadline gave 3540 seconds and a 590000 ms subagent timeout was allowed. Editing `promptCacheTtl` in a settings file from `5m` to `1h` while a sleeper ran moved its deadline from 270 to 3540 seconds and `check-env.js` followed.
+- A hook cannot wake a subagent. A throwaway `asyncRewake` hook on `PreToolUse` and `SubagentStop` woke the main session only.
+
+**Untested.** Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
 
 </details>
 

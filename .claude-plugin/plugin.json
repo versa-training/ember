@@ -1,6 +1,6 @@
 {
   "name": "ember",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
   "author": {
     "name": "versa.training",

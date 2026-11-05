@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- ember adapts to the configured cache lifetime per agent type. One resolver, `hooks/ember-config.js`, is read fresh on every hook call and by `scripts/check-env.js`. Main agent: `EMBER_MAIN_TTL`, the newest cache write in the transcript, `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `promptCacheTtl`, `ENABLE_PROMPT_CACHING_1H`. Subagents: `EMBER_SUBAGENT_TTL`, the force switch, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `subagentPromptCacheTtl`, the hour switch, then 5 minutes. Settings files include managed settings and `env` blocks.
+- Intervals follow the lifetime: 270 seconds for 5 minutes, 3540 for 1 hour. The main agent now wakes on a 5-minute cache. The sleeper resolves again about once a minute and before waking, so a settings change moves its deadline.
+- The subagent hook uses the subagent lifetime for its limit, and the check on `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` is gone. Its deny text now gives a polling command and says why not to wait for the finish notification, which fixed a live run where the subagent's cache expired.
+- New: `EMBER_WAKE_MESSAGE`, `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL`, and the testing aids `EMBER_LOG`, `EMBER_RESOLVE_MS`, `EMBER_TRANSCRIPT_ROOT`.
+- `check-env.js` prints the resolved lifetime, interval, and wake limit per agent type with sources.
+- `cache-report.js` and `estimate-savings.js` simulate main-agent wakes on a 5-minute cache again.
+- Tests for the resolver, precedence, malformed settings, and a deadline that moves.
+
 ## 0.2.1
 
 - README rewritten as a project page for you and your agent. New logo in `assets/logo.png`. `assets/1-headline.png` is gone. The chart caption now names the reference workload.

@@ -136,6 +136,7 @@ function main() {
       const current = readState(sessionId);
       return Boolean(current) && current.generation === generation;
     },
+    resolveMs: intEnv('EMBER_RESOLVE_MS', RESOLVE_MS),
     onDeadline: (at, seconds) => log({ event: 'deadline', at: new Date(at).toISOString(), seconds }),
   });
   if (!outcome.current) return 0;

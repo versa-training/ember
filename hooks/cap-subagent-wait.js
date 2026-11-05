@@ -26,7 +26,9 @@ function decide(payload, capMs, env = process.env) {
       permissionDecision: 'deny',
       permissionDecisionReason:
         `ember: a Bash timeout above ${seconds} seconds lets the prompt cache expire. ` +
-        `Run this command again with run_in_background: true, then check its output with Bash calls shorter than ${seconds} seconds until it finishes.`,
+        `Run this command again with run_in_background: true. Then check on it with Bash calls shorter than ${seconds} seconds until it finishes, ` +
+        `for example: timeout ${Math.max(1, seconds - 30)} sh -c 'until grep -q <text that marks the end> <output file>; do sleep 5; done'. ` +
+        'Do not start a call with sleep, because Claude Code rejects that. Do not end your turn and do not wait for the finish notification: after 5 minutes without a request your cache expires and the next request is billed in full. Keep calling until the command has finished.',
     },
   };
 }
