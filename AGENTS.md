@@ -14,7 +14,8 @@ ember is a Claude Code plugin (Node 22 or newer, no dependencies). It reports wh
 
 - Use the scripts for all arithmetic and parsing. Never compute figures by hand.
 - Benchmarks only read history and never start agents.
-- Label every figure as measured or simulated, and name the machine and the dates.
+- Label every figure as measured or simulated, and name the workload and the dates.
+- Figures from the reference workload (the heavy multi-agent workload in `docs/pricing-math.md`) stay labeled simulated wherever they appear, except the values that page marks measured.
 - Never commit transcripts or results that contain personal data.
 - No em or en dashes, no exclamation marks.
 - Release: bump the version in `package.json`, `.claude-plugin/plugin.json`, and `.claude-plugin/marketplace.json`, and add a `CHANGELOG.md` entry.

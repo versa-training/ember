@@ -2,7 +2,7 @@
 'use strict';
 
 // Reads Claude Code transcripts and estimates what expired prompt caches cost.
-// Everything stays on this machine. Dollar figures use API list prices, so on a
+// Everything stays on your computer. Dollar figures use API list prices, so on a
 // subscription they are an equivalent, not a bill.
 
 const fs = require('node:fs');

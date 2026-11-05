@@ -3,3 +3,5 @@ ember is original work under the MIT License. No source code is copied from othe
 Related projects, listed for reference only:
 - claude-code-cache-keepalive, https://github.com/yujiachen-y/claude-code-cache-keepalive
 - claude-code-cache-warmer, https://github.com/AshitaOrbis/claude-code-cache-warmer
+
+Font: assets/logo.png and assets/2-three-bills.png render text in Patrick Hand, Copyright (c) 2010-2012 Patrick Wagesreiter, under the SIL Open Font License 1.1, https://openfontlicense.org. Source: https://github.com/google/fonts/tree/main/ofl/patrickhand. The font file is not distributed here.

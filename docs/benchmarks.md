@@ -34,7 +34,7 @@ Every figure is simulated at API list prices. On a subscription, dollars are an 
 ## Limits
 
 - Nothing is measured. The same requests and pauses are assumed in every mode, so a changed lifetime that would change your behavior is not modeled.
-- Cache misses at 5 minutes use a measured miss rate by gap length from one machine (see `docs/pricing-math.md`).
+- Cache misses at 5 minutes use a measured miss rate by gap length from the reference workload (see `docs/pricing-math.md`).
 - Wake turns are assumed to cost 300 cache-written tokens and 50 output tokens plus a read of the context.
 - Models without a listed price are skipped and listed.
 - Prices and cache behavior change on Anthropic's side. Record your Claude Code version (`check-env.js`) and the date with any result you share.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1
+
+- README rewritten as a project page for you and your agent. New logo in `assets/logo.png`. `assets/1-headline.png` is gone. The chart caption now names the reference workload.
+- `docs/pricing-math.md` and `docs/benchmarks.md` refer to the reference workload. No figure changed.
+- `AGENTS.md`: figures from the reference workload stay labeled simulated. `CLAUDE.md` is now the symlink `AGENTS.md` says it is.
+
 ## 0.2.0
 
 - The project was renamed from warmcache to ember. Commands are `/ember:report` and `/ember:benchmark`, environment variables are `EMBER_*`, the default state directory is `~/.claude/ember`, and the wake message starts with `ember keepalive`. Entries below use the new name.

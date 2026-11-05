@@ -1,6 +1,6 @@
 # Pricing math
 
-How prompt cache prices turn into the choice between a 5-minute and a 1-hour cache, with the numbers from one heavy Claude Code machine. You need no prior context.
+How prompt cache prices turn into the choice between a 5-minute and a 1-hour cache, with the numbers from the reference workload: one real, heavy multi-agent Claude Code workload. You need no prior context.
 
 ## 1. Current pricing
 
@@ -12,7 +12,7 @@ USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pr
 | Sonnet 5.5 | 2 | 2.50 | 4 | 0.10 | 10 |
 | Haiku 4.5 | 1 | 1.25 | 2 | 0.10 | 5 |
 
-The table shows the three models most used here. `scripts/cache-report.js` prices every model on the pricing page, and prices Haiku 5.5 per request by its own prompt length (over 100,000 tokens, counting input, cache reads, and cache writes, pays the higher tier).
+The table shows the three models the reference workload used most. `scripts/cache-report.js` prices every model on the pricing page, and prices Haiku 5.5 per request by its own prompt length (over 100,000 tokens, counting input, cache reads, and cache writes, pays the higher tier).
 
 Multipliers against uncached input: 5-minute write 1.25x, 1-hour write 2x, read 0.05x on Opus 5.5 and Sonnet 5.5, 0.1x on most other models. The rest of this page uses 0.05x reads.
 
@@ -53,9 +53,9 @@ Worked example: a 300,000-token context adds 2,000 tokens per turn.
 
 Keeping a 5-minute cache alive with refreshes instead of paying the 1-hour premium: break-even is 15 wakes (0.75 / 0.05), which at 4.5 minutes each is 67.5 minutes of total waiting over an agent's life, at constant context. Beyond that, the premium is cheaper.
 
-## 6. What this looks like on real data
+## 6. What this looks like on the reference workload
 
-Same data throughout: 2026-09-29 to 2026-11-05, 157,267 requests, one heavy multi-agent machine, API list prices. Values marked simulated are not a real bill. Values marked measured come from recorded token counts at the lifetime that was used.
+Same data throughout: 2026-09-29 to 2026-11-05, 157,267 requests, one heavy multi-agent workload, API list prices. Values marked simulated are not a real bill. Values marked measured come from recorded token counts at the lifetime that was used.
 
 | Setup | Main | Subagents | Total | Basis |
 | --- | --- | --- | --- | --- |
@@ -80,7 +80,7 @@ A pause is 5 to 60 minutes between consecutive requests, followed by another req
 
 Best lifetime per agent with hindsight (simulated): main $4,281.70, subagents $5,746.28.
 
-76.8% of main agents and 86.4% of subagents never hit a pause. For those, 5 minutes is the right choice, which agrees with Anthropic's argument for the 5-minute default. In this data 87.9% of subagents were general-purpose (3,459 of 3,935 `.meta.json` files), so choosing a lifetime by agent type was not useful.
+76.8% of main agents and 86.4% of subagents never hit a pause. For those, 5 minutes is the right choice, which agrees with Anthropic's argument for the 5-minute default. In the reference workload 87.9% of subagents were general-purpose (3,459 of 3,935 `.meta.json` files), so choosing a lifetime by agent type was not useful.
 
 Options (simulated unless marked measured):
 
@@ -105,7 +105,7 @@ Why not request 1 hour only when a wait is coming: 1-hour entries must come befo
 ## 8. Limits
 
 - Every dollar figure except the two marked measured is simulated from recorded token counts, not billed.
-- One machine, one workload, one heavy multi-agent user. Yours will differ. Run `node scripts/cache-report.js` on your own transcripts.
+- The reference workload is one workload from one heavy multi-agent user. Yours will differ. Run `node scripts/cache-report.js` on your own transcripts.
 - The 5-minute what-if uses measured miss rates by gap length (11.9% at 5 to 5.5 minutes up to 99.5% over 10 minutes).
 - Refresh was not measured. Wake costs are modeled, and subscription quota weighting of cached reads is unknown.
 - Prices and cache behavior can change without notice.

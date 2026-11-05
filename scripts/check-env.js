@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 
-// Prints what decides cache behavior on this machine: Claude Code version, whether
+// Prints what decides cache behavior on your computer: Claude Code version, whether
 // the plugin manifest validates, the cache lifetime in recent transcripts, and
 // relevant environment variables. Variables with secret-looking names are left out.
 
