@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {
-  parseTranscript, usageOf, priceFor, whatIf, wakeCost, addTranscript, emptyTotals, listTranscripts,
+  parseTranscript, usageOf, priceFor, whatIf, wakeCost, wakePlan, addTranscript, emptyTotals, listTranscripts,
   skippedLines, promptTokensOf, usd, percent, PRICES_DATE, SUBAGENT_WAKE_MIN, MAIN_WAKE_MIN, MAIN_MAX_WAKES,
 } = require('./cache-report');
 const { recentLifetime } = require('./check-env');
@@ -73,16 +73,14 @@ function simulate(group, requests, fresh, isSubagent, longBash) {
       sims.no5m += at('5m');
       sims.no1h += at('1h');
       const paused = gap !== null && gap >= PAUSE_MIN;
+      const series = (ttl, plan, covered, uncovered) => at(plan.covered ? covered : uncovered) + plan.wakes * wakeCost(price, context, ttl);
       if (isSubagent) {
-        const needed = paused ? Math.floor(gap / SUBAGENT_WAKE_MIN) : 0;
-        sims.refresh5m += at('hit') + needed * wakeCost(price, context, '5m');
+        sims.refresh5m += series('5m', wakePlan(gap, { threshold: PAUSE_MIN, interval: SUBAGENT_WAKE_MIN }), 'hit', '5m');
       } else {
         for (const n of MAIN_WAKE_LIMITS) {
-          const needed = paused ? Math.floor(gap / SUBAGENT_WAKE_MIN) : 0;
-          sims[`refresh5m-${n}`] += at(needed <= n ? 'hit' : '5m') + Math.min(needed, n) * wakeCost(price, context, '5m');
+          sims[`refresh5m-${n}`] += series('5m', wakePlan(gap, { threshold: PAUSE_MIN, interval: SUBAGENT_WAKE_MIN, limit: n }), 'hit', '5m');
         }
-        const needed = gap !== null && gap >= MAIN_WAKE_MIN['1h'] ? Math.floor(gap / MAIN_WAKE_MIN['1h']) : 0;
-        sims.refresh1h += at(needed <= MAIN_MAX_WAKES ? 'hit1h' : '1h') + Math.min(needed, MAIN_MAX_WAKES) * wakeCost(price, context, '1h');
+        sims.refresh1h += series('1h', wakePlan(gap, { threshold: MAIN_WAKE_MIN['1h'], interval: MAIN_WAKE_MIN['1h'], limit: MAIN_MAX_WAKES }), 'hit1h', '1h');
       }
       if (paused && gap < PAUSE_MAX) {
         pauses += 1;

@@ -87,9 +87,9 @@ Options (simulated unless marked measured):
 | Agent | Option | Cost |
 | --- | --- | --- |
 | Main | 5 minutes, no refresh | $7,127 |
-| Main | 5 minutes, with refresh | $4,384 to $4,440 (older assumption that every gap of 5 minutes or more expires; wake limits of 4 to 24) |
+| Main | 5 minutes, with refresh | $4,529 (up to 4 wakes) to $4,926 (up to 24 wakes); a gap longer than the limit still expires, and every wake is paid. Figures from a newer run of `scripts/estimate-savings.js --days 0`, not the snapshot of the other rows |
 | Main | 1 hour, no refresh | $4,377 (measured) |
-| Main | 1 hour, with refresh | $4,077 |
+| Main | 1 hour, with refresh | $4,177 (up to 4 wakes; newer run, same note as above) |
 | Subagents | 5 minutes, no refresh | $6,417 (measured) |
 | Subagents | 5 minutes, with refresh | $5,633 |
 | Subagents | 1 hour, no refresh | $6,559 |

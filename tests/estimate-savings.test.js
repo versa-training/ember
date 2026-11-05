@@ -8,6 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { estimate, format, modeRows, longBashIds, countBucket } = require('../scripts/estimate-savings');
+const { analyze, wakePlan } = require('../scripts/cache-report');
 const { envLines } = require('../scripts/check-env');
 
 const script = (name) => path.join(__dirname, '..', 'scripts', name);
@@ -105,4 +106,64 @@ test('check-env leaves secret-looking variables out', () => {
   const { shown, hidden } = envLines({ CLAUDE_CODE_FOO: 'a', ANTHROPIC_API_KEY: 'x', CLAUDE_CODE_MESSAGING_TOKEN: 'y', ANTHROPIC_BASE_URL: 'https://u:p@h/', PATH: '/bin' });
   assert.deepEqual(shown, ['CLAUDE_CODE_FOO=a']);
   assert.deepEqual(hidden.sort(), ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_MESSAGING_TOKEN']);
+});
+
+// One 1-hour main agent on sonnet-4-5 (read 0.3, 1h write 6 per million), 100500 context:
+// a 120-minute gap (2 wakes, covered) and a 600-minute gap (10 needed, 4 sent, not covered).
+function wakeFixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-wake-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'proj', 's', 'subagents'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'proj', 's.jsonl'), [
+    line('m1', 0, use(0, 100000, '1h')),
+    line('m2', 1, use(100000, 500, '1h')),
+    line('m3', 121, use(0, 100500, '1h')),
+    line('m4', 721, use(0, 100500, '1h')),
+  ].join('\n'));
+  // A subagent with a 20-minute gap: 4 check-ins at 4:30.
+  fs.writeFileSync(path.join(root, 'proj', 's', 'subagents', 'a.jsonl'), [
+    line('a1', 0, use(0, 100000)),
+    line('a2', 20, use(0, 100000)),
+  ].join('\n'));
+  return root;
+}
+
+test('wakePlan applies the wake limit', () => {
+  const cfg = { threshold: 59, interval: 59, limit: 4 };
+  assert.deepEqual(wakePlan(null, cfg), { needed: 0, wakes: 0, covered: true });
+  assert.deepEqual(wakePlan(30, cfg), { needed: 0, wakes: 0, covered: true });
+  assert.deepEqual(wakePlan(120, cfg), { needed: 2, wakes: 2, covered: true });
+  assert.deepEqual(wakePlan(600, cfg), { needed: 10, wakes: 4, covered: false });
+  assert.deepEqual(wakePlan(600, { ...cfg, limit: 0 }), { needed: 10, wakes: 0, covered: false });
+});
+
+test('both scripts price the 1-hour wake fixture as computed by hand', (t) => {
+  const root = wakeFixture(t);
+  const wake = (0.3 * 100500 + 300 * 6 + 50 * 15) / 1e6;
+  const expiry = 100500 * (6 - 0.3) / 1e6;
+  const abandoned = 4 * 100500 * 0.3 / 1e6;
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} vs ${b}`);
+
+  const report = analyze(root, 0).main;
+  assert.equal(report.wakes, 6);
+  near(report.wakeCost, 6 * wake);
+  near(report.avoided, expiry);
+  near(report.abandonedWakeCost, abandoned);
+
+  const { sims, totals } = estimate(root, 0).main;
+  near(sims.no1h, totals.total);
+  near(sims.refresh1h, sims.no1h - expiry + 6 * wake + abandoned);
+  near(sims.no1h - sims.refresh1h, report.avoided - report.wakeCost - report.abandonedWakeCost);
+});
+
+test('the subagent check-in and 5-minute rows agree between the scripts', (t) => {
+  const root = wakeFixture(t);
+  const report = analyze(root, 0);
+  const sim = estimate(root, 0);
+  for (const kind of ['main', 'subagent']) {
+    assert.ok(Math.abs(sim[kind].sims.no5m - report[kind].totalAt5m) < 1e-9);
+    assert.ok(Math.abs(sim[kind].sims.no1h - report[kind].totalAt1h) < 1e-9);
+  }
+  assert.equal(report.subagent.wakes, 4);
+  assert.ok(Math.abs(sim.subagent.sims.refresh5m - (report.subagent.noExpiryAt5m + report.subagent.wakeCost)) < 1e-9);
 });

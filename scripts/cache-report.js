@@ -119,7 +119,7 @@ function missRate5m(gap) {
 // A 5-minute cache after a gap of 5 minutes or more is priced as an expected value:
 // a miss rewrites the whole prefix, a hit reads the context and writes the rest.
 function whatIf(price, use, gap, context, ttl) {
-  const writePrice = ttl === '1h' ? price.write1h : price.write5m;
+  const writePrice = ttl === '1h' || ttl === 'hit1h' ? price.write1h : price.write5m;
   const prefix = use.read + use.create;
   if (ttl === '1h') {
     if (gap !== null && gap >= 60 && context > MINIMUM_CONTEXT) return (prefix * writePrice) / 1e6;
@@ -140,6 +140,15 @@ function whatIf(price, use, gap, context, ttl) {
     return ((rate * miss) + ((1 - rate) * hit)) / 1e6;
   }
   return ((use.read * price.read) + (use.create * writePrice)) / 1e6;
+}
+
+// The wake simulation both scripts use. A gap of at least `threshold` minutes needs
+// floor(gap / interval) wakes to keep the cache alive. The plugin sends at most
+// `limit` of them, each paid whether or not the series reaches the next request.
+// The gap is covered only when the limit is enough; otherwise the cache expires.
+function wakePlan(gap, { threshold, interval, limit = Infinity }) {
+  const needed = gap !== null && gap >= threshold ? Math.floor(gap / interval) : 0;
+  return { needed, wakes: Math.min(needed, limit), covered: needed <= limit };
 }
 
 // Cost of one wake: the context is read from the cache, plus a short turn.
@@ -180,17 +189,18 @@ function addTranscript(totals, requests, isSubagent, seen) {
         const writePrice = writes ? writeCost / writes : (ttl === '1h' ? price.write1h : price.write5m) / 1e6;
         const rewritten = miss ? Math.min(Math.max(0, context - use.read), use.create) : 0;
         const extra = rewritten * (writePrice - price.read / 1e6);
-        const interval = isSubagent ? SUBAGENT_WAKE_MIN : MAIN_WAKE_MIN[ttl];
-        const needed = Math.floor(gap / interval);
         // The plugin wakes a main agent only while its cache lifetime is 1 hour.
-        const wakes = isSubagent ? needed : ttl === '1h' ? Math.min(needed, MAIN_MAX_WAKES) : 0;
+        const plan = isSubagent
+          ? wakePlan(gap, { threshold: TTL_MIN['5m'], interval: SUBAGENT_WAKE_MIN })
+          : wakePlan(gap, { threshold: TTL_MIN[ttl], interval: MAIN_WAKE_MIN[ttl], limit: ttl === '1h' ? MAIN_MAX_WAKES : 0 });
+        const { needed, wakes } = plan;
         totals.wakes += wakes;
         totals.wakeCost += wakes * wakeCost(price, context, ttl);
         if (miss) {
           totals.misses += 1;
           totals.rewritten += rewritten;
           totals.expiry += extra;
-          if (wakes > 0 && needed === wakes) totals.avoided += extra;
+          if (wakes > 0 && plan.covered) totals.avoided += extra;
         }
       }
     }
@@ -320,6 +330,6 @@ function main() {
 if (require.main === module) process.exit(main());
 
 module.exports = {
-  listTranscripts, skippedLines, wakeCost, promptTokensOf, usd, percent,
+  listTranscripts, skippedLines, wakeCost, wakePlan, promptTokensOf, usd, percent,
   MINIMUM_CONTEXT, SUBAGENT_WAKE_MIN, MAIN_WAKE_MIN, MAIN_MAX_WAKES,
   PRICES, PRICES_DATE, usageOf, missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format, analyze };

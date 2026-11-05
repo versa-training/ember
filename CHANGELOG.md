@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.4
+
+- `estimate-savings.js` priced the "1 hour, wake every 59 min" row with the 5-minute write price on every request that had no pause, so the row came out about $265 too low on the measured data and disagreed with `cache-report.js`. `whatIf` now prices `hit1h` at the 1-hour write price.
+- `cache-report.js` and `estimate-savings.js` share one wake simulation, `wakePlan`: the wakes sent are capped at the limit, and a gap is covered only when the limit reaches it.
+- Tests: a fixture with a covered 120-minute gap and an uncovered 600-minute gap, checked by hand against both scripts.
+- `docs/pricing-math.md`: refreshed the main-agent rows for 5 minutes with refresh and 1 hour with refresh.
+
 ## 0.1.3
 
 - Stop hook: the deadline is one interval after the hook starts. The transcript at Stop can lack the current turn, which put the deadline in the past and fired the next wake about a second after the previous one. A final response that streams for more than 60 seconds can let the cache expire before the wake.
