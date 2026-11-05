@@ -10,10 +10,9 @@
 
 <table>
 <tr>
-<td align="center" width="25%"><h3>33%</h3>of Claude cost goes to expired caches on default API settings<br><sub>simulated on <a href="#the-problem">a heavy multi-agent workload</a></sub></td>
-<td align="center" width="25%"><h3>13.4%</h3>on the same workload with one setting: main agent on 1 hour<br><sub>simulated, <a href="#what-ember-does">no plugin needed</a></sub></td>
-<td align="center" width="25%"><h3>$0</h3>and 0 agents started to get your own estimate<br><sub>the estimate itself is simulated</sub></td>
-<td align="center" width="25%"><h3>108 min</h3>of waiting is break-even for refreshing a 5-minute cache vs. letting it expire<br><sub>simulated from <a href="docs/pricing-math.md">list prices</a></sub></td>
+<td align="center" width="33.3%"><h3>33%</h3>of Claude cost goes to expired caches on default API settings<br><sub>simulated on <a href="#the-problem">a heavy multi-agent workload</a></sub></td>
+<td align="center" width="33.3%"><h3>13.4%</h3>on the same workload with one setting: main agent on 1hr cache TTL<br></td>
+<td align="center" width="33.3%"><h3>3.7%</h3>when keeping the cache fresh with <br>ember</br></td>
 </tr>
 </table>
 
@@ -25,29 +24,28 @@
 
 ## Find out what it costs you
 
+Don't believe my numbers. Ask your agent to estimate your potential cost savings based on your session history.
+
 Run this and see your own number. You need Node 22 or newer on PATH.
+
+```text
+git clone https://github.com/versa-training/ember.git
+node ember/scripts/estimate-savings.js --days 30
+```
+The estimate reads only your local transcripts, starts no agents, and makes no model call.
+
+Ask your agent to interpret the results.
+
+## Installation
 
 ```text
 /plugin marketplace add versa-training/ember
 /plugin install ember@ember
 ```
 
-Restart Claude Code, then run:
+Installing adds hooks to keep your agents fresh. 
 
-```text
-/ember:benchmark
-```
-
-The estimate reads only your local transcripts, starts no agents, and makes no model call. `/ember:benchmark` adds one normal turn in your session to show and explain the result.
-
-Installing also turns the hooks on. To see your number first, with no hooks and no tokens, run the script from a clone:
-
-```bash
-git clone https://github.com/versa-training/ember.git
-node ember/scripts/estimate-savings.js --days 30
-```
-
-**Tell your agent:**
+**Or tell your agent:**
 
 ```text
 Install the ember plugin from github.com/versa-training/ember and run /ember:benchmark, then tell me which mode to use.
