@@ -12,6 +12,8 @@ USD per million tokens, from https://platform.claude.com/docs/en/about-claude/pr
 | Sonnet 5.5 | 2 | 2.50 | 4 | 0.10 | 10 |
 | Haiku 4.5 | 1 | 1.25 | 2 | 0.10 | 5 |
 
+The table shows the three models most used here. `scripts/cache-report.js` prices every model on the pricing page, and prices Haiku 5.5 per request by its own prompt length (over 100,000 tokens, counting input, cache reads, and cache writes, pays the higher tier).
+
 Multipliers against uncached input: 5-minute write 1.25x, 1-hour write 2x, read 0.05x on Opus 5.5 and Sonnet 5.5, 0.1x on most other models. The rest of this page uses 0.05x reads.
 
 Terms:
@@ -53,13 +55,13 @@ Keeping a 5-minute cache alive with refreshes instead of paying the 1-hour premi
 
 ## 6. What this looks like on real data
 
-Same data throughout: 2026-09-29 to 2026-11-05, 157,267 requests, one heavy multi-agent machine, API list prices. Values marked simulated are not a real bill.
+Same data throughout: 2026-09-29 to 2026-11-05, 157,267 requests, one heavy multi-agent machine, API list prices. Values marked simulated are not a real bill. Values marked measured come from recorded token counts at the lifetime that was used.
 
 | Setup | Main | Subagents | Total | Basis |
 | --- | --- | --- | --- | --- |
 | Everything on 5 minutes | $7,127.03 (simulated) | $6,417.45 (measured) | $13,544.48 | expiry $4,468.12, 33.0% of total; range 32.1% to 35.0% depending on the expiry assumption |
-| Main 1 hour, subagents 5 minutes (actual use) | $4,377.05 (simulated) | $6,417.45 (measured) | $10,794.50 | expiry $1,448.41, 13.4% |
-| Everything on 1 hour | $4,377.05 (simulated) | $6,558.98 (simulated) | $10,936.03 | |
+| Main 1 hour, subagents 5 minutes (actual use) | $4,377.05 (measured) | $6,417.45 (measured) | $10,794.50 | expiry $1,448.41, 13.4% |
+| Everything on 1 hour | $4,377.05 (measured) | $6,558.98 (simulated) | $10,936.03 | |
 
 Keepalive added to the main-1-hour setup, simulated: keepalive cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned).
 
@@ -78,17 +80,17 @@ A pause is 5 to 60 minutes between consecutive requests, followed by another req
 
 Best lifetime per agent with hindsight (simulated): main $4,281.70, subagents $5,746.28.
 
-76.8% of main agents and 86.4% of subagents never hit a pause. For those, 5 minutes is the right choice, which agrees with Anthropic's argument for the 5-minute default. In this data 99.7% of subagents were general-purpose, so choosing a lifetime by agent type was not useful.
+76.8% of main agents and 86.4% of subagents never hit a pause. For those, 5 minutes is the right choice, which agrees with Anthropic's argument for the 5-minute default. In this data 87.9% of subagents were general-purpose (3,459 of 3,935 `.meta.json` files), so choosing a lifetime by agent type was not useful.
 
-Options (simulated unless marked actual):
+Options (simulated unless marked measured):
 
 | Agent | Option | Cost |
 | --- | --- | --- |
 | Main | 5 minutes, no refresh | $7,127 |
 | Main | 5 minutes, with refresh | $4,384 to $4,440 (older assumption that every gap of 5 minutes or more expires; wake limits of 4 to 24) |
-| Main | 1 hour, no refresh | $4,377 (actual) |
+| Main | 1 hour, no refresh | $4,377 (measured) |
 | Main | 1 hour, with refresh | $4,077 |
-| Subagents | 5 minutes, no refresh | $6,417 (actual) |
+| Subagents | 5 minutes, no refresh | $6,417 (measured) |
 | Subagents | 5 minutes, with refresh | $5,633 |
 | Subagents | 1 hour, no refresh | $6,559 |
 | Subagents | 1 hour, with refresh | not simulated |
@@ -102,7 +104,7 @@ Why not request 1 hour only when a wait is coming: 1-hour entries must come befo
 
 ## 8. Limits
 
-- Every dollar figure except the subagent 5-minute total is simulated from recorded token counts, not billed.
+- Every dollar figure except the two marked measured is simulated from recorded token counts, not billed.
 - One machine, one workload, one heavy multi-agent user. Yours will differ. Run `node scripts/cache-report.js` on your own transcripts.
 - The 5-minute what-if uses measured miss rates by gap length (11.9% at 5 to 5.5 minutes up to 99.5% over 10 minutes).
 - Refresh was not measured. Wake costs are modeled, and subscription quota weighting of cached reads is unknown.

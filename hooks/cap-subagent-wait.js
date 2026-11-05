@@ -9,7 +9,14 @@ const { readStdin, intEnv, isOff } = require('./warmcache-lib');
 
 const DEFAULT_CAP_MS = 270000;
 
-function decide(payload, capMs) {
+const isTruthy = (value) => value !== undefined && value !== '' && !/^(0|false|no|off)$/i.test(value);
+
+// Returns null where the instruction cannot be followed (background tasks disabled)
+// or its reason would be false (subagents already use a 1-hour cache). A
+// subagentPromptCacheTtl setting of 1h is not visible to hooks: set WARMCACHE_SUBAGENT=0 then.
+function decide(payload, capMs, env = process.env) {
+  if (isTruthy(env.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS)) return null;
+  if (env.CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL === '1h') return null;
   const input = payload.tool_input;
   if (!payload.agent_id || payload.tool_name !== 'Bash' || !input) return null;
   if (input.run_in_background || !(input.timeout > capMs)) return null;

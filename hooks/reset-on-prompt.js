@@ -16,6 +16,7 @@ try {
 }
 if (!payload.session_id || payload.agent_id) process.exit(0);
 const state = readState(payload.session_id);
+if (!state) process.exit(0);
 const fromWake = state.pendingWakeAt && Date.now() - state.pendingWakeAt < WAKE_GRACE_MS;
 writeState(payload.session_id, {
   generation: state.generation + 1,

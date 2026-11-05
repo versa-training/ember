@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2
+
+- State lives in `~/.claude/warmcache` by default. Any state directory must be a real directory owned by the user, created with mode 0700. Otherwise the hooks do nothing. Temp files get random names and are written exclusively. Stored values are validated.
+- Stop hook: sleeps in 5-second slices so a superseded sleeper exits quickly. The deadline is the newest usage entry plus the interval, and a wake that would come more than 60 seconds late (for example after a suspend) is skipped.
+- Subagent hook: stands down when background tasks are disabled or the subagent cache lifetime is 1 hour.
+- Cost report: prices every model on the pricing page, Haiku 5.5 by prompt length. Prints skipped requests by model. Does not simulate wakes for main agents on a 5-minute cache. Adds the extra cost of expiries on the 5-minute simulation. Falls back to the total cache write count when the breakdown is missing, skips dangling symlinks, and filters by request time for `--days`.
+- README and pricing math corrected after review.
+
 ## 0.1.1
 
 - Cost report: the 5-minute what-if applies the measured miss rate by gap length instead of treating every gap of 5 minutes or more as a full rewrite.

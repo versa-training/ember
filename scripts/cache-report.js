@@ -10,10 +10,37 @@ const os = require('node:os');
 const path = require('node:path');
 
 // USD per million tokens. Source: platform.claude.com/docs/en/about-claude/pricing, 2026-11-05.
+// First match wins, so a longer id comes before any shorter id it contains
+// (opus-5-5 before opus-5, opus-4-5 before opus-4). Model ids are matched after
+// "." becomes "-".
+const price = (match, input, write5m, write1h, read, output) => ({ match, input, write5m, write1h, read, output });
 const PRICES = [
-  { match: 'opus-5-5', input: 4, write5m: 5, write1h: 8, read: 0.2, output: 20 },
-  { match: 'sonnet-5-5', input: 2, write5m: 2.5, write1h: 4, read: 0.1, output: 10 },
-  { match: 'haiku-4-5', input: 1, write5m: 1.25, write1h: 2, read: 0.1, output: 5 },
+  price(['fable-5-1'], 10, 12.5, 20, 0.25, 50),
+  price(['mythos-5-1'], 10, 12.5, 20, 0.25, 50),
+  price(['fable-5'], 10, 12.5, 20, 1, 50),
+  price(['mythos-5'], 10, 12.5, 20, 1, 50),
+  price(['opus-5-5'], 4, 5, 8, 0.2, 20),
+  price(['opus-5'], 5, 6.25, 10, 0.5, 25),
+  price(['opus-4-8'], 5, 6.25, 10, 0.5, 25),
+  price(['opus-4-7'], 5, 6.25, 10, 0.5, 25),
+  price(['opus-4-6'], 5, 6.25, 10, 0.5, 25),
+  price(['opus-4-5'], 5, 6.25, 10, 0.5, 25),
+  price(['opus-4-1'], 15, 18.75, 30, 1.5, 75),
+  price(['opus-4'], 15, 18.75, 30, 1.5, 75),
+  price(['sonnet-5-5'], 2, 2.5, 4, 0.1, 10),
+  price(['sonnet-5'], 2, 2.5, 4, 0.2, 10),
+  price(['sonnet-4-6'], 3, 3.75, 6, 0.3, 15),
+  price(['sonnet-4-5'], 3, 3.75, 6, 0.3, 15),
+  price(['sonnet-4'], 3, 3.75, 6, 0.3, 15),
+  {
+    match: ['haiku-5-5'],
+    tiers: [
+      { upTo: 100000, ...price(null, 0.1, 0.125, 0.2, 0.01, 0.5) },
+      { upTo: Infinity, ...price(null, 0.5, 0.625, 1, 0.05, 2.5) },
+    ],
+  },
+  price(['haiku-4-5'], 1, 1.25, 2, 0.1, 5),
+  price(['haiku-3-5', '3-5-haiku'], 0.8, 1, 1.6, 0.08, 4),
 ];
 
 const MINIMUM_CONTEXT = 2000;
@@ -24,9 +51,15 @@ const MAIN_WAKE_MIN = { '5m': 4.5, '1h': 59 };
 const MAIN_MAX_WAKES = 4;
 const TTL_MIN = { '5m': 5, '1h': 59 };
 
-function priceFor(model) {
-  return PRICES.find((price) => String(model).includes(price.match)) ?? null;
+// promptTokens (input, cache reads, and cache writes) picks the tier of a model priced by prompt length.
+function priceFor(model, promptTokens = 0) {
+  const id = String(model).replace(/\./g, '-');
+  const entry = PRICES.find((candidate) => candidate.match.some((fragment) => id.includes(fragment)));
+  if (!entry) return null;
+  return entry.tiers ? entry.tiers.find((tier) => promptTokens <= tier.upTo) : entry;
 }
+
+const promptTokensOf = (use) => use.input + use.read + use.create;
 
 function parseTranscript(text) {
   const byId = new Map();
@@ -62,7 +95,7 @@ function usageOf(request) {
 
 function emptyTotals() {
   return {
-    files: 0, requests: 0, total: 0, misses: 0, rewritten: 0, expiry: 0,
+    files: 0, requests: 0, skipped: {}, noExpiryAt5m: 0, total: 0, misses: 0, rewritten: 0, expiry: 0,
     wakes: 0, wakeCost: 0, avoided: 0, abandonedWakeCost: 0, totalAt5m: 0, totalAt1h: 0,
   };
 }
@@ -93,6 +126,11 @@ function whatIf(price, use, gap, context, ttl) {
       const kept = Math.min(context, prefix);
       return ((kept * price.read) + ((prefix - kept) * writePrice)) / 1e6;
     }
+  } else if (ttl === 'hit') {
+    if (gap !== null && gap >= 5 && context > MINIMUM_CONTEXT) {
+      const kept = Math.min(context, prefix);
+      return ((kept * price.read) + ((prefix - kept) * price.write5m)) / 1e6;
+    }
   } else if (gap !== null && gap >= 5 && context > MINIMUM_CONTEXT) {
     const rate = missRate5m(gap);
     const kept = Math.min(context, prefix);
@@ -108,11 +146,13 @@ function addTranscript(totals, requests, isSubagent, seen) {
   let previous = null;
   let lastTtl = isSubagent ? '5m' : '1h';
   for (const request of requests) {
-    const price = priceFor(request.model);
     const fresh = !seen.has(request.id);
     seen.add(request.id);
     const use = usageOf(request);
+    const price = priceFor(request.model, promptTokensOf(use));
+    if (!price && fresh) totals.skipped[request.model] = (totals.skipped[request.model] ?? 0) + 1;
     if (price && fresh) {
+      if (use.write5m + use.write1h === 0 && use.create > 0) use[lastTtl === '1h' ? 'write1h' : 'write5m'] = use.create;
       const context = previous ? previous.read + previous.create : 0;
       const gap = previous ? (request.time - previous.time) / 60000 : null;
       if (use.write1h > 0) lastTtl = '1h';
@@ -123,6 +163,7 @@ function addTranscript(totals, requests, isSubagent, seen) {
       totals.requests += 1;
       totals.total += writeCost + other;
       totals.totalAt5m += passthrough + whatIf(price, use, gap, context, '5m');
+      totals.noExpiryAt5m += passthrough + whatIf(price, use, gap, context, 'hit');
       totals.totalAt1h += passthrough + whatIf(price, use, gap, context, '1h');
 
       const ttl = isSubagent ? '5m' : lastTtl;
@@ -134,7 +175,8 @@ function addTranscript(totals, requests, isSubagent, seen) {
         const extra = rewritten * (writePrice - price.read / 1e6);
         const interval = isSubagent ? SUBAGENT_WAKE_MIN : MAIN_WAKE_MIN[ttl];
         const needed = Math.floor(gap / interval);
-        const wakes = isSubagent ? needed : Math.min(needed, MAIN_MAX_WAKES);
+        // The plugin wakes a main agent only while its cache lifetime is 1 hour.
+        const wakes = isSubagent ? needed : ttl === '1h' ? Math.min(needed, MAIN_MAX_WAKES) : 0;
         const wakeWrite = ttl === '1h' ? price.write1h : price.write5m;
         const overhead = (WAKE_WRITE_TOKENS * wakeWrite + WAKE_OUTPUT_TOKENS * price.output) / 1e6;
         totals.wakes += wakes;
@@ -143,17 +185,25 @@ function addTranscript(totals, requests, isSubagent, seen) {
           totals.misses += 1;
           totals.rewritten += rewritten;
           totals.expiry += extra;
-          if (needed === wakes) totals.avoided += extra;
+          if (wakes > 0 && needed === wakes) totals.avoided += extra;
         }
       }
     }
     if (price) previous = { ...use, time: request.time };
   }
-  if (!isSubagent && previous) {
-    const lastPrice = priceFor(requests[requests.length - 1].model);
+  if (!isSubagent && previous && lastTtl === '1h') {
+    const lastPrice = priceFor(requests[requests.length - 1].model, promptTokensOf(previous));
     if (lastPrice) {
       totals.abandonedWakeCost += MAIN_MAX_WAKES * (((previous.read + previous.create) * lastPrice.read) / 1e6);
     }
+  }
+}
+
+function modifiedSince(file, sinceMs) {
+  try {
+    return fs.statSync(file).mtimeMs >= sinceMs;
+  } catch {
+    return false;
   }
 }
 
@@ -169,7 +219,7 @@ function listTranscripts(root, sinceMs) {
     for (const entry of entries) {
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) walk(full);
-      else if (entry.name.endsWith('.jsonl') && fs.statSync(full).mtimeMs >= sinceMs) files.push(full);
+      else if (entry.name.endsWith('.jsonl') && modifiedSince(full, sinceMs)) files.push(full);
     }
   };
   walk(root);
@@ -181,7 +231,13 @@ function analyze(root, sinceMs) {
   const seen = new Set();
   for (const file of listTranscripts(root, sinceMs)) {
     const isSubagent = file.split(path.sep).includes('subagents');
-    const requests = parseTranscript(fs.readFileSync(file, 'utf8'));
+    let text;
+    try {
+      text = fs.readFileSync(file, 'utf8');
+    } catch {
+      continue;
+    }
+    const requests = parseTranscript(text).filter((request) => request.time >= sinceMs);
     if (requests.length) addTranscript(isSubagent ? result.subagent : result.main, requests, isSubagent, seen);
   }
   return result;
@@ -191,11 +247,22 @@ const usd = (value) => `$${value.toLocaleString('en-US', { minimumFractionDigits
 const millions = (value) => `${(value / 1e6).toFixed(1)}M`;
 const percent = (part, whole) => (whole ? `${((part / whole) * 100).toFixed(1)}%` : 'n/a');
 
+function skippedLines(main, subagent) {
+  const merged = {};
+  for (const counts of [main.skipped, subagent.skipped]) {
+    for (const [model, count] of Object.entries(counts)) merged[model] = (merged[model] ?? 0) + count;
+  }
+  const entries = Object.entries(merged).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) return [];
+  return [`Skipped requests by model: ${entries.map(([model, count]) => `${model} ${count}`).join(', ')}.`];
+}
+
 function format(result, days) {
   const { main, subagent } = result;
   const total = main.total + subagent.total;
   const expiry = main.expiry + subagent.expiry;
   const row = (label, a, b, c) => `${label.padEnd(34)}${a.padStart(14)}${b.padStart(14)}${c.padStart(14)}`;
+  const extra5m = (t) => t.totalAt5m - t.noExpiryAt5m;
   const saved = (t) => t.avoided - t.wakeCost;
   return [
     `warmcache report, ${days ? `last ${days} days` : 'all transcripts'}. Estimates at API list prices.`,
@@ -208,7 +275,7 @@ function format(result, days) {
     row('Extra cost of expiries', usd(main.expiry), usd(subagent.expiry), usd(expiry)),
     row('Share of total cost', percent(main.expiry, main.total), percent(subagent.expiry, subagent.total), percent(expiry, total)),
     '',
-    'Simulated keepalive (not measured):',
+    'Simulated keepalive (not measured). Main-agent wakes are simulated only where the cache lifetime is 1 hour, because the plugin does not wake 5-minute main sessions; their wakes and avoided expiry stay zero:',
     row('Wakes', String(main.wakes), String(subagent.wakes), String(main.wakes + subagent.wakes)),
     row('Keepalive cost', usd(main.wakeCost), usd(subagent.wakeCost), usd(main.wakeCost + subagent.wakeCost)),
     row('Expiry cost avoided', usd(main.avoided), usd(subagent.avoided), usd(main.avoided + subagent.avoided)),
@@ -217,10 +284,13 @@ function format(result, days) {
     '',
     'Simulated total cost on a fixed cache lifetime. Every write pays that lifetime\'s price:',
     row('Everything on 5 minutes', usd(main.totalAt5m), usd(subagent.totalAt5m), usd(main.totalAt5m + subagent.totalAt5m)),
+    row('  Extra cost of expiries', usd(extra5m(main)), usd(extra5m(subagent)), usd(extra5m(main) + extra5m(subagent))),
+    row('  Share of that total', percent(extra5m(main), main.totalAt5m), percent(extra5m(subagent), subagent.totalAt5m), percent(extra5m(main) + extra5m(subagent), main.totalAt5m + subagent.totalAt5m)),
     row('Main 1 hour, subagents 5 minutes', usd(main.totalAt1h), usd(subagent.totalAt5m), usd(main.totalAt1h + subagent.totalAt5m)),
     row('Everything on 1 hour', usd(main.totalAt1h), usd(subagent.totalAt1h), usd(main.totalAt1h + subagent.totalAt1h)),
     '',
     'Assumes the same requests and pauses. Models without a listed price are skipped.',
+    ...skippedLines(main, subagent),
   ].join('\n');
 }
 
@@ -244,4 +314,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format };
+module.exports = { missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format, analyze };
