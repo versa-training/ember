@@ -1,6 +1,6 @@
 # AGENTS.md
 
-warmcache is a Claude Code plugin (Node 22 or newer, no dependencies). It reports what expired prompt caches cost (`scripts/cache-report.js`) and keeps caches warm with hooks (`hooks/`). `CLAUDE.md` is a symlink to this file.
+ember is a Claude Code plugin (Node 22 or newer, no dependencies). It reports what expired prompt caches cost (`scripts/cache-report.js`) and keeps caches warm with hooks (`hooks/`). `CLAUDE.md` is a symlink to this file.
 
 ## Commands
 

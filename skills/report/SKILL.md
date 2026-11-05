@@ -1,9 +1,9 @@
 ---
 name: report
-description: Estimate what expired prompt caches cost in Claude Code, from the local transcripts. Use for "cache report", "what do expired caches cost me", or "/warmcache:report".
+description: Estimate what expired prompt caches cost in Claude Code, from the local transcripts. Use for "cache report", "what do expired caches cost me", or "/ember:report".
 ---
 
-# warmcache report
+# ember report
 
 Run the report and show its output unchanged:
 

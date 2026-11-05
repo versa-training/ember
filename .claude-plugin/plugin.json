@@ -1,13 +1,13 @@
 {
-  "name": "warmcache",
-  "version": "0.1.4",
+  "name": "ember",
+  "version": "0.2.0",
   "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
   "author": {
     "name": "versa.training",
     "url": "https://versa.training"
   },
-  "homepage": "https://github.com/versa-training/warmcache",
-  "repository": "https://github.com/versa-training/warmcache",
+  "homepage": "https://github.com/versa-training/ember",
+  "repository": "https://github.com/versa-training/ember",
   "license": "MIT",
   "keywords": ["prompt-cache", "cost", "tokens", "hooks", "subagents"],
   "hooks": {

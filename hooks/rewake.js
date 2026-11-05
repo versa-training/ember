@@ -5,12 +5,12 @@
 // then exits 2 to wake the idle session for one short turn. A newer Stop or a
 // user prompt bumps the generation, so a sleeper that is out of date exits quietly.
 
-const { readStdin, intEnv, isOff, readState, writeState, transcriptTail } = require('./warmcache-lib');
+const { readStdin, intEnv, isOff, readState, writeState, transcriptTail } = require('./ember-lib');
 
 const DEFAULT_INTERVAL_SEC = 3540;
 const DEFAULT_MAX_WAKES = 4;
 const WAKE_MESSAGE =
-  'warmcache keepalive: this turn only keeps the prompt cache warm. Reply with the single word ok. Do not use tools.';
+  'ember keepalive: this turn only keeps the prompt cache warm. Reply with the single word ok. Do not use tools.';
 
 const SLICE_MS = 5000;
 const STALE_MS = 60000;
@@ -39,7 +39,7 @@ function shouldSleep({ ttl, intervalOverride, wakes, maxWakes }) {
 }
 
 function main() {
-  if (isOff('WARMCACHE_MAIN')) return 0;
+  if (isOff('EMBER_MAIN')) return 0;
   let payload;
   try {
     payload = JSON.parse(readStdin());
@@ -49,8 +49,8 @@ function main() {
   const sessionId = payload.session_id;
   if (!sessionId || payload.agent_id) return 0;
 
-  const intervalOverride = intEnv('WARMCACHE_MAIN_INTERVAL_SEC', null);
-  const maxWakes = intEnv('WARMCACHE_MAX_WAKES', DEFAULT_MAX_WAKES);
+  const intervalOverride = intEnv('EMBER_MAIN_INTERVAL_SEC', null);
+  const maxWakes = intEnv('EMBER_MAX_WAKES', DEFAULT_MAX_WAKES);
   const state = readState(sessionId);
   if (!state) return 0;
   const startMs = Date.now();

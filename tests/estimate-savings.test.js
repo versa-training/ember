@@ -25,7 +25,7 @@ const use = (read, create, ttl = '5m') => ({
 const bash = (timeout) => [{ type: 'tool_use', name: 'Bash', input: { command: 'sleep 1', timeout } }];
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-est-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ember-est-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const project = path.join(root, 'proj');
   fs.mkdirSync(path.join(project, 's', 'subagents'), { recursive: true });
@@ -77,7 +77,7 @@ test('the text output is labeled simulated and deterministic', (t) => {
 });
 
 test('an empty history and an unpriced model are reported', (t) => {
-  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-est-'));
+  const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'ember-est-'));
   t.after(() => fs.rmSync(empty, { recursive: true, force: true }));
   const none = spawnSync('node', [script('estimate-savings.js'), '--dir', empty, '--days', '0'], { encoding: 'utf8' });
   assert.equal(none.status, 0);
@@ -111,7 +111,7 @@ test('check-env leaves secret-looking variables out', () => {
 // One 1-hour main agent on sonnet-4-5 (read 0.3, 1h write 6 per million), 100500 context:
 // a 120-minute gap (2 wakes, covered) and a 600-minute gap (10 needed, 4 sent, not covered).
 function wakeFixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-wake-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ember-wake-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   fs.mkdirSync(path.join(root, 'proj', 's', 'subagents'), { recursive: true });
   fs.writeFileSync(path.join(root, 'proj', 's.jsonl'), [

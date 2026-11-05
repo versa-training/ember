@@ -1,9 +1,9 @@
 ---
 name: benchmark
-description: Estimate savings per cache mode from local history. Use for "what would warmcache save me", "which cache mode fits my usage", or "/warmcache:benchmark".
+description: Estimate savings per cache mode from local history. Use for "what would ember save me", "which cache mode fits my usage", or "/ember:benchmark".
 ---
 
-# warmcache savings estimate
+# ember savings estimate
 
 Reads local transcripts only. Never start agents or sessions. Scripts do all arithmetic and parsing. Do not compute figures by hand.
 

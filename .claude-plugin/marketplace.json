@@ -1,5 +1,5 @@
 {
-  "name": "warmcache",
+  "name": "ember",
   "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
   "owner": {
     "name": "versa.training",
@@ -7,11 +7,11 @@
   },
   "plugins": [
     {
-      "name": "warmcache",
+      "name": "ember",
       "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
-      "version": "0.1.4",
+      "version": "0.2.0",
       "license": "MIT",
-      "homepage": "https://github.com/versa-training/warmcache",
+      "homepage": "https://github.com/versa-training/ember",
       "author": {
         "name": "versa.training"
       },

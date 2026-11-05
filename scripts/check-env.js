@@ -12,7 +12,7 @@ const { spawnSync } = require('node:child_process');
 const { parseTranscript, usageOf } = require('./cache-report');
 
 const PLUGIN_ROOT = path.join(__dirname, '..');
-const RELEVANT = /^(CLAUDE_CODE_|ANTHROPIC_|WARMCACHE_|DISABLE_PROMPT_CACHING|ENABLE_PROMPT_CACHING)/;
+const RELEVANT = /^(CLAUDE_CODE_|ANTHROPIC_|EMBER_|DISABLE_PROMPT_CACHING|ENABLE_PROMPT_CACHING)/;
 const SECRET = /KEY|TOKEN|SECRET|PASSWORD|AUTH|CREDENTIAL|COOKIE|BEARER/i;
 
 function envLines(env) {

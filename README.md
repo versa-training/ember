@@ -1,4 +1,4 @@
-# warmcache
+# ember
 
 Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.
 
@@ -7,6 +7,8 @@ Find out what expired prompt caches cost you in Claude Code, and keep them warm 
 > This has happened before. Users measured Claude Code cache writes moving from 1 hour to 5 minutes around early March 2026, with no announcement they could find ([issue 46829](https://github.com/anthropics/claude-code/issues/46829), closed as not planned). In that issue, [Jarred-Sumner, writing for the Claude Code team](https://github.com/anthropics/claude-code/issues/46829#issuecomment-4231266649), describes the change as deliberate optimization, not a regression. A later report ([issue 84253](https://github.com/anthropics/claude-code/issues/84253), still open) saw 5-minute-only writes from 2.1.218. Later comments in that thread say the remainder was a detection gap: a subscription token passed through `ANTHROPIC_AUTH_TOKEN` gets the API-key default, and one commenter measured 1 hour on all 29 versions tested with a plain subscription login. The commenter [bcherny](https://github.com/anthropics/claude-code/issues/46829#issuecomment-4237689126), whose GitHub profile says "Claude Code @ Anthropic", wrote: "we use experiment gates that are cached client-side" and "We also are not defaulting API customers to 1h yet".
 >
 > Run the report before and after any Claude Code upgrade.
+
+An ember stays warm between fires. ember keeps your prompt cache warm between turns.
 
 ## What it costs
 
@@ -53,12 +55,12 @@ Subscription users: wakes use plan quota, how quota weights cached reads is unkn
 
 ## How it works
 
-- **Subagent hook.** A PreToolUse hook denies foreground Bash timeouts above 270 seconds in subagents. It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed, or when `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` is `1h`, because the reason would be false. A `subagentPromptCacheTtl` setting of `1h` is not detected, so set `WARMCACHE_SUBAGENT=0` then. It does not shorten them, because a test showed a shortened timeout killed the command with exit code 143. The denial tells the subagent to rerun in the background.
+- **Subagent hook.** A PreToolUse hook denies foreground Bash timeouts above 270 seconds in subagents. It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed, or when `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` is `1h`, because the reason would be false. A `subagentPromptCacheTtl` setting of `1h` is not detected, so set `EMBER_SUBAGENT=0` then. It does not shorten them, because a test showed a shortened timeout killed the command with exit code 143. The denial tells the subagent to rerun in the background.
 - **Stop hook.** A Stop hook with `asyncRewake` sleeps 59 minutes, then wakes the session for a one-word turn. It wakes at most 4 times before the limit resets, and only when the last cache write was 1 hour. The limit resets on every `UserPromptSubmit` event. The Claude Code docs say that event also fires on some turns Claude Code starts on its own, so the limit can reset on those too. This is untested. The sleep ends one interval after the hook starts, because the transcript at Stop can lack the current turn. A final response that streams for more than 60 seconds can therefore let the cache expire before the wake (about 0.13% of final turns on the measured machine). A newer Stop or prompt ends the sleep within about 5 seconds, and a wake that would come more than 60 seconds late (for example after a laptop suspend) is skipped because the cache has probably expired already. Each wake is a real turn in the transcript. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with a check-in every 4:30 while waiting. See [docs/pricing-math.md](docs/pricing-math.md).
 
 ## Test status
 
-Unit tests pass (`npm test`). Run against Claude Code:
+Unit tests pass (`npm test`). The live tests below ran under the earlier name warmcache on the same code. Run against Claude Code:
 
 - `asyncRewake` woke a headless stream-json session on Claude Code 2.1.310 with a 12-second interval, and the wake limit held (2 wakes with a limit of 2, then none).
 - Subagent hook, 2.1.310, haiku, cap set to 5 seconds: a subagent asked to run `sleep 12; echo finished` with a long Bash timeout was denied, then reran the same command with `run_in_background: true` and read the output `finished`. One run.
@@ -75,17 +77,17 @@ Untested: the real 59-minute interval, laptop suspend, `/clear` with a pending s
 Requirements: Node 22 or newer on PATH.
 
 ```text
-/plugin marketplace add versa-training/warmcache
-/plugin install warmcache@warmcache
+/plugin marketplace add versa-training/ember
+/plugin install ember@ember
 ```
 
 Restart Claude Code.
 
 ## Commands
 
-- `/warmcache:report` prints the cost report.
+- `/ember:report` prints the cost report.
 - `node scripts/cache-report.js --days N --dir PATH --json` runs it from a clone.
-- `/warmcache:benchmark` runs `scripts/check-env.js` and `scripts/estimate-savings.js` and interprets them. It reads history only and starts no agent. See [docs/benchmarks.md](docs/benchmarks.md).
+- `/ember:benchmark` runs `scripts/check-env.js` and `scripts/estimate-savings.js` and interprets them. It reads history only and starts no agent. See [docs/benchmarks.md](docs/benchmarks.md).
 - `node scripts/estimate-savings.js --days N` estimates the cost of each cache mode on your history (simulated, free).
 - `node scripts/check-env.js` prints the Claude Code version, the cache lifetime in recent transcripts, and relevant environment variables.
 
@@ -93,12 +95,12 @@ Restart Claude Code.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `WARMCACHE_MAIN=0` | on | Turns off the Stop hook wakes. |
-| `WARMCACHE_SUBAGENT=0` | on | Turns off the subagent hook. |
-| `WARMCACHE_SUBAGENT_WAIT_MS` | 270000 | Longest foreground Bash timeout a subagent may use. |
-| `WARMCACHE_MAIN_INTERVAL_SEC` | 3540 | Seconds between wakes. Setting it skips the 1-hour check, and a headless run may then wait for a pending sleeper before it exits. |
-| `WARMCACHE_MAX_WAKES` | 4 | Wakes allowed before the limit resets (see How it works). |
-| `WARMCACHE_STATE_DIR` | `~/.claude/warmcache` | Where wake state is stored. It must be a real directory you own, not a symlink, or the hooks do nothing. |
+| `EMBER_MAIN=0` | on | Turns off the Stop hook wakes. |
+| `EMBER_SUBAGENT=0` | on | Turns off the subagent hook. |
+| `EMBER_SUBAGENT_WAIT_MS` | 270000 | Longest foreground Bash timeout a subagent may use. |
+| `EMBER_MAIN_INTERVAL_SEC` | 3540 | Seconds between wakes. Setting it skips the 1-hour check, and a headless run may then wait for a pending sleeper before it exits. |
+| `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets (see How it works). |
+| `EMBER_STATE_DIR` | `~/.claude/ember` | Where wake state is stored. It must be a real directory you own, not a symlink, or the hooks do nothing. |
 
 ## Privacy
 
@@ -119,7 +121,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), [docs/benc
 
 ## About
 
-warmcache is from the team behind [versa.training](https://versa.training). Looking for a tool to help your team master difficult conversations? Check out [versa.training](https://versa.training).
+ember is from the team behind [versa.training](https://versa.training). Looking for a tool to help your team master difficult conversations? Check out [versa.training](https://versa.training).
 
 ## License
 

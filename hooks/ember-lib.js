@@ -21,7 +21,7 @@ function isOff(name) {
 }
 
 function stateDir() {
-  return process.env.WARMCACHE_STATE_DIR || path.join(os.homedir(), '.claude', 'warmcache');
+  return process.env.EMBER_STATE_DIR || path.join(os.homedir(), '.claude', 'ember');
 }
 
 // Creates the state directory with mode 0700 and returns its path, or null when it

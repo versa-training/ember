@@ -9,12 +9,12 @@ const test = require('node:test');
 
 const { decide, DEFAULT_CAP_MS } = require('../hooks/cap-subagent-wait');
 const { shouldSleep, deadlineFor, isStale } = require('../hooks/rewake');
-const { lastCacheTtl, transcriptTail } = require('../hooks/warmcache-lib');
+const { lastCacheTtl, transcriptTail } = require('../hooks/ember-lib');
 const { parseTranscript, addTranscript, emptyTotals, missRate5m, whatIf, priceFor, analyze, format } = require('../scripts/cache-report');
 
 const hook = (name) => path.join(__dirname, '..', 'hooks', name);
 function temporaryDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'warmcache-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ember-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
@@ -57,7 +57,7 @@ test('leaves the main agent, short waits, and background commands alone', () => 
 test('the cap hook prints valid hook output and can be turned off', () => {
   const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x', timeout: 590000 } };
   assert.equal(JSON.parse(run('cap-subagent-wait.js', payload).stdout).hookSpecificOutput.hookEventName, 'PreToolUse');
-  assert.equal(run('cap-subagent-wait.js', payload, { WARMCACHE_SUBAGENT: '0' }).stdout, '');
+  assert.equal(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '0' }).stdout, '');
 });
 
 test('sleeps only on a known 1-hour cache and below the wake limit', () => {
@@ -72,10 +72,10 @@ test('rewake exits 2 with the message, then a newer generation cancels it', asyn
   const dir = temporaryDir(t);
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('m1', 0, write1h(0, 100), undefined, Date.now())}\n`);
-  const env = { WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '0' };
+  const env = { EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '0' };
   const woken = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
   assert.equal(woken.status, 2);
-  assert.match(woken.stderr, /warmcache keepalive/);
+  assert.match(woken.stderr, /ember keepalive/);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).wakes, 1);
 
   run('reset-on-prompt.js', { session_id: 's' }, env);
@@ -84,16 +84,16 @@ test('rewake exits 2 with the message, then a newer generation cancels it', asyn
   run('reset-on-prompt.js', { session_id: 's' }, env);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).wakes, 0, 'a later prompt resets it');
 
-  const limited = run('rewake.js', { session_id: 'other', transcript_path: transcript }, { ...env, WARMCACHE_MAX_WAKES: '0' });
+  const limited = run('rewake.js', { session_id: 'other', transcript_path: transcript }, { ...env, EMBER_MAX_WAKES: '0' });
   assert.equal(limited.status, 0);
   assert.equal(limited.stderr, '');
 });
 
 test('rewake does nothing for a subagent or when turned off', (t) => {
   const dir = temporaryDir(t);
-  const env = { WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '0' };
+  const env = { EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '0' };
   assert.equal(run('rewake.js', { session_id: 's', agent_id: 'a' }, env).status, 0);
-  assert.equal(run('rewake.js', { session_id: 's' }, { ...env, WARMCACHE_MAIN: '0' }).status, 0);
+  assert.equal(run('rewake.js', { session_id: 's' }, { ...env, EMBER_MAIN: '0' }).status, 0);
 });
 
 test('reads the newest cache lifetime from the transcript', (t) => {
@@ -168,7 +168,7 @@ test('a symlinked state directory is refused and nothing is written through it',
   fs.symlinkSync(target, link);
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('m1', 0, write1h(0, 100), undefined, Date.now())}\n`);
-  const env = { WARMCACHE_STATE_DIR: link, WARMCACHE_MAIN_INTERVAL_SEC: '0' };
+  const env = { EMBER_STATE_DIR: link, EMBER_MAIN_INTERVAL_SEC: '0' };
   const result = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
   assert.equal(result.status, 0);
   assert.equal(result.stderr, '');
@@ -177,14 +177,14 @@ test('a symlinked state directory is refused and nothing is written through it',
 
 test('the state directory is created with mode 0700', (t) => {
   const dir = path.join(temporaryDir(t), 'state');
-  run('reset-on-prompt.js', { session_id: 's' }, { WARMCACHE_STATE_DIR: dir });
+  run('reset-on-prompt.js', { session_id: 's' }, { EMBER_STATE_DIR: dir });
   assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
   assert.deepEqual(fs.readdirSync(dir), ['s.json']);
 });
 
 test('invalid stored state resets to defaults', (t) => {
   const dir = temporaryDir(t);
-  const env = { WARMCACHE_STATE_DIR: dir };
+  const env = { EMBER_STATE_DIR: dir };
   for (const bad of ['{"generation":1,"wakes":-3}', '{"generation":1.5,"wakes":0}', '{"generation":"1","wakes":0}', 'null', 'nope']) {
     fs.writeFileSync(path.join(dir, 's.json'), bad);
     run('reset-on-prompt.js', { session_id: 's' }, env);
@@ -197,7 +197,7 @@ test('a superseded sleeper exits within seconds', (t) => {
   const dir = temporaryDir(t);
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('m1', 0, write1h(0, 100), undefined, Date.now())}\n`);
-  const env = { ...process.env, WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '600' };
+  const env = { ...process.env, EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '600' };
   const started = Date.now();
   const child = require('node:child_process').spawn('node', [hook('rewake.js')], { env, stdio: ['pipe', 'ignore', 'ignore'] });
   child.stdin.end(JSON.stringify({ session_id: 's', transcript_path: transcript }));
@@ -226,7 +226,7 @@ test('an old newest usage entry does not bring the wake forward', (t) => {
   const dir = temporaryDir(t);
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('a', 0, write1h(0, 10), undefined, Date.now() - 600000)}\n`);
-  const env = { WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '3' };
+  const env = { EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '3' };
   const started = Date.now();
   const woken = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
   assert.equal(woken.status, 2);

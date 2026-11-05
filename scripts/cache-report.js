@@ -280,7 +280,7 @@ function format(result, days) {
   const extra5m = (t) => t.totalAt5m - t.noExpiryAt5m;
   const saved = (t) => t.avoided - t.wakeCost;
   return [
-    `warmcache report, ${days ? `last ${days} days` : 'all transcripts'}. Estimates at API list prices.`,
+    `ember report, ${days ? `last ${days} days` : 'all transcripts'}. Estimates at API list prices.`,
     '',
     row('', 'Main', 'Subagents', 'Total'),
     row('Requests', String(main.requests), String(subagent.requests), String(main.requests + subagent.requests)),

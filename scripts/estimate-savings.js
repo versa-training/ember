@@ -143,7 +143,7 @@ function signed(value) {
 }
 
 function format(result, days, root, lifetime) {
-  const out = [`warmcache savings estimate, ${days ? `last ${days} days` : 'all transcripts'}, from ${root}.`];
+  const out = [`ember savings estimate, ${days ? `last ${days} days` : 'all transcripts'}, from ${root}.`];
   out.push(`SIMULATED. Nothing was measured and no agent was run. API list prices dated ${PRICES_DATE}. Same requests and pauses in every row.`, '');
   out.push(lifetime
     ? `Cache lifetime now (transcripts of the last 2 days): newest write ${lifetime.newest}, ${(lifetime.share1h * 100).toFixed(1)}% of written tokens at 1h (measured).`
