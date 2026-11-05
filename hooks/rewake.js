@@ -5,6 +5,7 @@
 // then exits 2 to wake the idle session for one short turn. A newer Stop or a
 // user prompt bumps the generation, so a sleeper that is out of date exits quietly.
 
+const fs = require('node:fs');
 const { readStdin, intEnv, isOff, readState, writeState, transcriptTail } = require('./ember-lib');
 const config = require('./ember-config');
 
@@ -12,6 +13,7 @@ const WAKE_MESSAGE = config.DEFAULT_WAKE_MESSAGE;
 
 const SLICE_MS = 5000;
 const STALE_MS = 60000;
+const RESOLVE_MS = 60000;
 const TTL_RETRY_MS = 2000;
 const TTL_RETRIES = 10;
 
@@ -38,6 +40,49 @@ function shouldSleep({ ttl, intervalOverride, wakes, maxWakes }) {
   return intervalOverride !== null || ttl === '1h' || ttl === '5m';
 }
 
+// Sleeps until the deadline, which is startMs plus the interval. The interval is
+// resolved again every resolveMs and just before the end, so a changed lifetime moves
+// the deadline. `intervalSec()` returns the current interval, or null to keep the last
+// one. `isCurrent()` returns false when a newer Stop or prompt took over. Returns
+// { current, deadline }: the last deadline, and false when superseded.
+function sleepUntilDeadline({ startMs, intervalSec, isCurrent, now = Date.now, nap = sleep, sliceMs = SLICE_MS, resolveMs = RESOLVE_MS, onDeadline = () => {} }) {
+  let seconds = intervalSec();
+  let deadline = deadlineFor(startMs, seconds);
+  onDeadline(deadline, seconds);
+  let lastResolve = now();
+  const resolveAgain = () => {
+    lastResolve = now();
+    const next = intervalSec();
+    if (next !== null && next !== seconds) {
+      seconds = next;
+      deadline = deadlineFor(startMs, seconds);
+      onDeadline(deadline, seconds);
+    }
+  };
+  let settled = false;
+  while (!settled) {
+    while (now() < deadline) {
+      nap(Math.min(sliceMs, deadline - now()));
+      if (!isCurrent()) return { current: false, deadline };
+      if (now() - lastResolve >= resolveMs) resolveAgain();
+    }
+    // One more look just before waking.
+    const before = deadline;
+    resolveAgain();
+    settled = deadline === before || deadline <= now();
+  }
+  return { current: true, deadline };
+}
+
+function log(entry) {
+  if (!process.env.EMBER_LOG) return;
+  try {
+    fs.appendFileSync(process.env.EMBER_LOG, `${JSON.stringify({ time: new Date().toISOString(), ...entry })}\n`);
+  } catch {
+    // logging is optional
+  }
+}
+
 function main() {
   if (isOff('EMBER_MAIN')) return 0;
   let payload;
@@ -55,7 +100,8 @@ function main() {
   if (!state) return 0;
   const startMs = Date.now();
   const settingsCwd = payload.cwd || process.cwd();
-  let lifetime = config.explicitMainLifetime();
+  const explicit = config.explicitMainLifetime();
+  let lifetime = explicit;
   let ttl = lifetime ? lifetime.ttl : transcriptTail(payload.transcript_path).ttl;
   // An interactive transcript can lack the current turn at Stop. Wait for it.
   if (ttl === null && intervalOverride === null && state.wakes < maxWakes) {
@@ -74,12 +120,26 @@ function main() {
 
   const generation = state.generation + 1;
   if (!writeState(sessionId, { ...state, generation })) return 0;
-  const deadline = deadlineFor(startMs, config.mainInterval(ttl).seconds);
-  while (Date.now() < deadline) {
-    sleep(Math.min(SLICE_MS, deadline - Date.now()));
-    const current = readState(sessionId);
-    if (!current || current.generation !== generation) return 0;
-  }
+  // The lifetime is resolved again on each pass: settings files are read fresh. The
+  // process env is the one this hook started with.
+  const resolveSeconds = () => {
+    if (intervalOverride !== null) return intervalOverride;
+    const fresh = config.mainLifetime({ cwd: settingsCwd, transcriptTtl: explicit ? null : transcriptTail(payload.transcript_path).ttl });
+    return fresh.ttl ? config.INTERVAL_SEC[fresh.ttl] : null;
+  };
+  const first = config.mainInterval(ttl).seconds;
+  const interval = () => resolveSeconds() ?? first;
+  const outcome = sleepUntilDeadline({
+    startMs,
+    intervalSec: interval,
+    isCurrent: () => {
+      const current = readState(sessionId);
+      return Boolean(current) && current.generation === generation;
+    },
+    onDeadline: (at, seconds) => log({ event: 'deadline', at: new Date(at).toISOString(), seconds }),
+  });
+  if (!outcome.current) return 0;
+  const { deadline } = outcome;
   if (isStale(Date.now(), deadline)) return 0;
 
   const latest = readState(sessionId);
@@ -91,4 +151,4 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { shouldSleep, deadlineFor, isStale, WAKE_MESSAGE };
+module.exports = { sleepUntilDeadline, shouldSleep, deadlineFor, isStale, WAKE_MESSAGE };

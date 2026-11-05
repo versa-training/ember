@@ -72,6 +72,7 @@ function recentLifetime(root, days = 2) {
 // Resolved lifetime, interval, and wake limit per agent type, each with its source.
 function resolvedLines(lifetime, env = process.env, cwd = process.cwd()) {
   const main = config.mainLifetime({ env, cwd, transcriptTtl: lifetime ? lifetime.newest : null });
+  const configured = config.configuredMain({ env, cwd });
   const mainInterval = config.mainInterval(main.ttl, env);
   const wakes = config.maxWakes(env);
   const sub = config.subagentLifetime({ env, cwd });
@@ -79,6 +80,9 @@ function resolvedLines(lifetime, env = process.env, cwd = process.cwd()) {
   return [
     'resolved by ember:',
     `  main agent lifetime: ${main.ttl ?? 'unknown (no wakes until a cache write shows it)'} (${main.source})`,
+    ...(configured.ttl !== main.ttl
+      ? [`  note: configuration says ${configured.ttl ?? 'nothing'} (${configured.source}) but the newest cache write in transcripts is ${lifetime ? lifetime.newest : 'absent'}; ember follows what happened`]
+      : []),
     `  main agent wake interval: ${mainInterval.seconds ?? 'none'} seconds (${mainInterval.source})`,
     `  main agent wake limit: ${wakes.value} (${wakes.source})`,
     `  subagent lifetime: ${sub.ttl} (${sub.source})`,

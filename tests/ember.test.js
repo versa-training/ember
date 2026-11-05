@@ -258,16 +258,16 @@ test('prices every listed model, longest id first, and tiers Haiku 5.5 by prompt
   assert.deepEqual(totals.skipped, { mystery: 2 });
 });
 
-test('main-agent wakes are not simulated while the cache lifetime is 5 minutes', () => {
+test('main-agent wakes are simulated on a 5-minute cache, up to the wake limit', () => {
   const totals = emptyTotals();
   const text = [assistant('a', 0, write5m(0, 100000)), assistant('b', 20, write5m(0, 100000))].join('\n');
   addTranscript(totals, parseTranscript(text), false, new Set());
   assert.equal(totals.misses, 1);
   assert.ok(totals.expiry > 0);
-  assert.equal(totals.wakes, 0);
-  assert.equal(totals.wakeCost, 0);
-  assert.equal(totals.avoided, 0);
-  assert.equal(totals.abandonedWakeCost, 0);
+  assert.equal(totals.wakes, 4);
+  assert.ok(totals.wakeCost > 0);
+  assert.equal(totals.avoided, totals.expiry);
+  assert.ok(totals.abandonedWakeCost > 0);
 });
 
 test('the 5-minute simulation reports the extra cost of expiries', () => {
