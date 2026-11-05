@@ -1,0 +1,20 @@
+{
+  "name": "warmcache",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/versa-training/warmcache.git"
+  },
+  "homepage": "https://github.com/versa-training/warmcache",
+  "keywords": ["claude-code", "prompt-cache", "cost", "hooks"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "report": "node scripts/cache-report.js"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "name": "warmcache",
+  "version": "0.1.0",
+  "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
+  "author": {
+    "name": "versa.training",
+    "url": "https://versa.training"
+  },
+  "homepage": "https://github.com/versa-training/warmcache",
+  "repository": "https://github.com/versa-training/warmcache",
+  "license": "MIT",
+  "keywords": ["prompt-cache", "cost", "tokens", "hooks", "subagents"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/cap-subagent-wait.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/rewake.js\"",
+            "asyncRewake": true,
+            "timeout": 3600
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/reset-on-prompt.js\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
