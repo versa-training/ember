@@ -54,7 +54,7 @@ Subscription users: wakes use plan quota, how quota weights cached reads is unkn
 ## How it works
 
 - **Subagent hook.** A PreToolUse hook denies foreground Bash timeouts above 270 seconds in subagents. It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed, or when `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL` is `1h`, because the reason would be false. A `subagentPromptCacheTtl` setting of `1h` is not detected, so set `WARMCACHE_SUBAGENT=0` then. It does not shorten them, because a test showed a shortened timeout killed the command with exit code 143. The denial tells the subagent to rerun in the background.
-- **Stop hook.** A Stop hook with `asyncRewake` sleeps 59 minutes, then wakes the session for a one-word turn. It wakes at most 4 times before the limit resets, and only when the last cache write was 1 hour. The limit resets on every `UserPromptSubmit` event. The Claude Code docs say that event also fires on some turns Claude Code starts on its own, so the limit can reset on those too. This is untested. The sleep ends at the newest cache write plus the interval, a newer Stop or prompt ends it within about 5 seconds, and a wake that would come more than 60 seconds late (for example after a laptop suspend) is skipped because the cache has probably expired already. Each wake is a real turn in the transcript. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with a check-in every 4:30 while waiting. See [docs/pricing-math.md](docs/pricing-math.md).
+- **Stop hook.** A Stop hook with `asyncRewake` sleeps 59 minutes, then wakes the session for a one-word turn. It wakes at most 4 times before the limit resets, and only when the last cache write was 1 hour. The limit resets on every `UserPromptSubmit` event. The Claude Code docs say that event also fires on some turns Claude Code starts on its own, so the limit can reset on those too. This is untested. The sleep ends one interval after the hook starts, because the transcript at Stop can lack the current turn. A final response that streams for more than 60 seconds can therefore let the cache expire before the wake (about 0.13% of final turns on the measured machine). A newer Stop or prompt ends the sleep within about 5 seconds, and a wake that would come more than 60 seconds late (for example after a laptop suspend) is skipped because the cache has probably expired already. Each wake is a real turn in the transcript. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with a check-in every 4:30 while waiting. See [docs/pricing-math.md](docs/pricing-math.md).
 
 ## Test status
 
@@ -65,7 +65,10 @@ Unit tests pass (`npm test`). Run against Claude Code:
 - A review confirmed that `claude plugin validate` passes, that `--plugin-dir` loads the plugin on 2.1.310, and that a wake fired and a limit of 1 held in a live headless run.
 - In one-shot `-p` mode the transcript at Stop lacked the current turn, so no sleeper started.
 
-Untested: an interactive session, the real 59-minute interval, laptop suspend, `/clear` with a pending sleeper, and whether interactive sessions see a stale cache lifetime at Stop.
+- An interactive session with a short interval showed 4 wakes and the limit of 4 held. The UI displays each wake as "Stop hook feedback".
+- Wake timing, 2.1.310, interactive, interval 60 seconds: before 0.1.3 the second wake came 1 second after the first, because the transcript at Stop lacked the current turn. After the fix the hooks started 60.9 and 60.8 seconds apart. One run each.
+
+Untested: the real 59-minute interval, laptop suspend, `/clear` with a pending sleeper, and whether the 1-hour check works in an interactive session, because setting the interval skips it.
 
 ## Install
 
@@ -82,6 +85,9 @@ Restart Claude Code.
 
 - `/warmcache:report` prints the cost report.
 - `node scripts/cache-report.js --days N --dir PATH --json` runs it from a clone.
+- `/warmcache:benchmark` runs `scripts/check-env.js` and `scripts/estimate-savings.js` and interprets them. It reads history only and starts no agent. See [docs/benchmarks.md](docs/benchmarks.md).
+- `node scripts/estimate-savings.js --days N` estimates the cost of each cache mode on your history (simulated, free).
+- `node scripts/check-env.js` prints the Claude Code version, the cache lifetime in recent transcripts, and relevant environment variables.
 
 ## Configuration
 
@@ -109,7 +115,7 @@ Everything stays local. The plugin code makes no network calls. Wakes and the re
 npm test
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), [docs/benchmarks.md](docs/benchmarks.md), and [AGENTS.md](AGENTS.md) for coding agents.
 
 ## About
 

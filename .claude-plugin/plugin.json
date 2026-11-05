@@ -1,6 +1,6 @@
 {
   "name": "warmcache",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Find out what expired prompt caches cost you in Claude Code, and keep them warm with two small hooks.",
   "author": {
     "name": "versa.training",

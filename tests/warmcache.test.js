@@ -211,9 +211,8 @@ test('a superseded sleeper exits within seconds', (t) => {
   });
 });
 
-test('the deadline follows the newest usage entry, and a late clock means no wake', (t) => {
-  assert.equal(deadlineFor(1000, 5000, 10), 11000);
-  assert.equal(deadlineFor(null, 5000, 10), 15000);
+test('the deadline is one interval after the hook starts, and a late clock means no wake', (t) => {
+  assert.equal(deadlineFor(5000, 10), 15000);
   assert.equal(isStale(11000 + 60000, 11000), false);
   assert.equal(isStale(11000 + 60001, 11000), true);
 
@@ -221,13 +220,17 @@ test('the deadline follows the newest usage entry, and a late clock means no wak
   const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('a', 0, write1h(0, 10), undefined, 1000)}\n${assistant('b', 0, write1h(10, 5), undefined, 5000)}\n`);
   assert.equal(transcriptTail(transcript).newestMs, 5000);
+});
 
-  // An old entry puts the deadline more than 60 seconds in the past, as after a suspend.
+test('an old newest usage entry does not bring the wake forward', (t) => {
+  const dir = temporaryDir(t);
+  const transcript = path.join(dir, 't.jsonl');
   fs.writeFileSync(transcript, `${assistant('a', 0, write1h(0, 10), undefined, Date.now() - 600000)}\n`);
-  const env = { WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '1' };
-  const late = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
-  assert.equal(late.status, 0);
-  assert.equal(late.stderr, '');
+  const env = { WARMCACHE_STATE_DIR: dir, WARMCACHE_MAIN_INTERVAL_SEC: '3' };
+  const started = Date.now();
+  const woken = run('rewake.js', { session_id: 's', transcript_path: transcript }, env);
+  assert.equal(woken.status, 2);
+  assert.ok(Date.now() - started >= 2900, `woke after ${Date.now() - started} ms`);
 });
 
 test('prices every listed model, longest id first, and tiers Haiku 5.5 by prompt length', () => {

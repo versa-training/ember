@@ -19,10 +19,12 @@ function sleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-// The cache entry was last refreshed by the newest usage entry, so it expires one
-// interval after that. Without a usable timestamp the deadline is one interval from now.
-function deadlineFor(newestMs, nowMs, intervalSec) {
-  return (Number.isFinite(newestMs) ? newestMs : nowMs) + intervalSec * 1000;
+// The transcript at Stop can lack the current turn, so its newest usage entry may
+// be an older turn and would give a deadline in the past. The deadline is one
+// interval after the hook starts. A final response that streams for more than
+// 60 seconds lets the cache expire before the wake.
+function deadlineFor(startMs, intervalSec) {
+  return startMs + intervalSec * 1000;
 }
 
 // A clock far past the deadline means the machine was suspended: the cache has
@@ -51,12 +53,13 @@ function main() {
   const maxWakes = intEnv('WARMCACHE_MAX_WAKES', DEFAULT_MAX_WAKES);
   const state = readState(sessionId);
   if (!state) return 0;
-  const { ttl, newestMs } = transcriptTail(payload.transcript_path);
+  const startMs = Date.now();
+  const { ttl } = transcriptTail(payload.transcript_path);
   if (!shouldSleep({ ttl, intervalOverride, wakes: state.wakes, maxWakes })) return 0;
 
   const generation = state.generation + 1;
   if (!writeState(sessionId, { ...state, generation })) return 0;
-  const deadline = deadlineFor(newestMs, Date.now(), intervalOverride ?? DEFAULT_INTERVAL_SEC);
+  const deadline = deadlineFor(startMs, intervalOverride ?? DEFAULT_INTERVAL_SEC);
   while (Date.now() < deadline) {
     sleep(Math.min(SLICE_MS, deadline - Date.now()));
     const current = readState(sessionId);

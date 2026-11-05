@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- Stop hook: the deadline is one interval after the hook starts. The transcript at Stop can lack the current turn, which put the deadline in the past and fired the next wake about a second after the previous one. A final response that streams for more than 60 seconds can let the cache expire before the wake.
+- Add `scripts/estimate-savings.js` (simulated cost per cache mode from local history, no tokens spent), `scripts/check-env.js`, `/warmcache:benchmark`, and `docs/benchmarks.md`.
+- Add `AGENTS.md` for coding agents. `cache-report.js` exports its price table.
+
 ## 0.1.2
 
 - State lives in `~/.claude/warmcache` by default. Any state directory must be a real directory owned by the user, created with mode 0700. Otherwise the hooks do nothing. Temp files get random names and are written exclusively. Stored values are validated.

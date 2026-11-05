@@ -10,6 +10,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 // USD per million tokens. Source: platform.claude.com/docs/en/about-claude/pricing, 2026-11-05.
+const PRICES_DATE = '2026-11-05';
 // First match wins, so a longer id comes before any shorter id it contains
 // (opus-5-5 before opus-5, opus-4-5 before opus-4). Model ids are matched after
 // "." becomes "-".
@@ -126,10 +127,10 @@ function whatIf(price, use, gap, context, ttl) {
       const kept = Math.min(context, prefix);
       return ((kept * price.read) + ((prefix - kept) * writePrice)) / 1e6;
     }
-  } else if (ttl === 'hit') {
+  } else if (ttl === 'hit' || ttl === 'hit1h') {
     if (gap !== null && gap >= 5 && context > MINIMUM_CONTEXT) {
       const kept = Math.min(context, prefix);
-      return ((kept * price.read) + ((prefix - kept) * price.write5m)) / 1e6;
+      return ((kept * price.read) + ((prefix - kept) * (ttl === 'hit1h' ? price.write1h : price.write5m))) / 1e6;
     }
   } else if (gap !== null && gap >= 5 && context > MINIMUM_CONTEXT) {
     const rate = missRate5m(gap);
@@ -139,6 +140,12 @@ function whatIf(price, use, gap, context, ttl) {
     return ((rate * miss) + ((1 - rate) * hit)) / 1e6;
   }
   return ((use.read * price.read) + (use.create * writePrice)) / 1e6;
+}
+
+// Cost of one wake: the context is read from the cache, plus a short turn.
+function wakeCost(price, context, ttl) {
+  const wakeWrite = ttl === '1h' ? price.write1h : price.write5m;
+  return (context * price.read + WAKE_WRITE_TOKENS * wakeWrite + WAKE_OUTPUT_TOKENS * price.output) / 1e6;
 }
 
 function addTranscript(totals, requests, isSubagent, seen) {
@@ -177,10 +184,8 @@ function addTranscript(totals, requests, isSubagent, seen) {
         const needed = Math.floor(gap / interval);
         // The plugin wakes a main agent only while its cache lifetime is 1 hour.
         const wakes = isSubagent ? needed : ttl === '1h' ? Math.min(needed, MAIN_MAX_WAKES) : 0;
-        const wakeWrite = ttl === '1h' ? price.write1h : price.write5m;
-        const overhead = (WAKE_WRITE_TOKENS * wakeWrite + WAKE_OUTPUT_TOKENS * price.output) / 1e6;
         totals.wakes += wakes;
-        totals.wakeCost += wakes * ((context * price.read) / 1e6 + overhead);
+        totals.wakeCost += wakes * wakeCost(price, context, ttl);
         if (miss) {
           totals.misses += 1;
           totals.rewritten += rewritten;
@@ -314,4 +319,7 @@ function main() {
 
 if (require.main === module) process.exit(main());
 
-module.exports = { missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format, analyze };
+module.exports = {
+  listTranscripts, skippedLines, wakeCost, promptTokensOf, usd, percent,
+  MINIMUM_CONTEXT, SUBAGENT_WAKE_MIN, MAIN_WAKE_MIN, MAIN_MAX_WAKES,
+  PRICES, PRICES_DATE, usageOf, missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format, analyze };
