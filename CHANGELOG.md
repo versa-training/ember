@@ -2,7 +2,9 @@
 
 ## 0.6.0
 
-- Subagent check-ins no longer refuse commands. With `EMBER_SUBAGENT=1`, a foreground Bash timeout above the subagent's interval is lowered to it, so a long command moves to the background and a short command costs nothing. A new `PostToolUse` hook, `hooks/poll-after-move.js`, then tells the subagent to keep checking until the command ends.
+- Subagent check-ins no longer refuse commands. With `EMBER_SUBAGENT=1`, a foreground Bash timeout above the subagent's interval is lowered to it, so a long command moves to the background and a short command costs nothing. A new `PostToolUse` hook, `hooks/poll-after-move.js`, then tells the subagent to check once, which gives two refreshes in total.
+- `cache-report.js` simulates subagent check-ins with a limit of 2, and `estimate-savings.js` prints rows for limits of 1 to 4. Two cover 95.9% of subagent pauses on the reference workload.
+- The headline figure is 3.7% with main agent wakes and two subagent refreshes.
 
 ## 0.5.0
 

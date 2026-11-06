@@ -17,7 +17,7 @@ Flags: `--days N` (default 30, 0 reads everything and can take minutes on large 
 | --- | --- |
 | Actual | Your requests priced as they happened, at API list prices. |
 | 5 minutes, no refresh | Every cache write lives 5 minutes. |
-| 5 minutes, check-in every 4:30 | Subagents check in before the cache expires, which needs `EMBER_SUBAGENT=1`. For main agents the output simulates wakes every 4:30 with up to 4, 12, and 24 wakes. |
+| 5 minutes, check-in every 4:30, up to N | Subagents check in before the cache expires, which needs `EMBER_SUBAGENT=1`. ember uses a limit of 2, and the no limit row shows the most it could gain. For main agents the output simulates wakes every 4:30 with up to 4, 12, and 24 wakes. |
 | 1 hour, no refresh | Every cache write lives 1 hour. |
 | 1 hour, wake every 59 min, up to 4 | Main agents only. This is what the Stop hook does. |
 
@@ -43,5 +43,5 @@ The simulated wake rows use the plugin defaults: an interval of 270 seconds on a
 - Models without a listed price are skipped and listed.
 - Prices and cache behavior change on Anthropic's side. Record your Claude Code version (`check-env.js`) and the date with any result you share.
 - A pause of 5 to 60 minutes between requests counts whether the agent was waiting for a person or a tool.
-- The subagent check-in row needs `EMBER_SUBAGENT=1`, and it depends on the subagent following the instruction to keep checking.
+- The subagent check-in row needs `EMBER_SUBAGENT=1`, and it depends on the subagent following the instruction to check.
 - Savings can come in bursts. On the same workload one week of the 38 held 44% of the subagent pauses, so a short `--days` window can differ a lot from a long one.

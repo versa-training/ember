@@ -62,7 +62,7 @@ test('patterns, costs, and the unreachable share on fixture transcripts', (t) =>
   assert.ok(result.subagent.sims.refresh5m < result.subagent.sims.no5m);
   // Every row is the actual cost minus its saving.
   for (const row of modeRows(result.main, false).slice(1)) assert.ok(Math.abs(row.saving - (result.main.totals.total - row.cost)) < 1e-9);
-  assert.equal(modeRows(result.subagent, true).length, 4);
+  assert.equal(modeRows(result.subagent, true).length, 8);
   assert.equal(modeRows(result.main, false).length, 7);
 });
 
@@ -164,6 +164,8 @@ test('the subagent check-in and 5-minute rows agree between the scripts', (t) =>
     assert.ok(Math.abs(sim[kind].sims.no5m - report[kind].totalAt5m) < 1e-9);
     assert.ok(Math.abs(sim[kind].sims.no1h - report[kind].totalAt1h) < 1e-9);
   }
-  assert.equal(report.subagent.wakes, 4);
-  assert.ok(Math.abs(sim.subagent.sims.refresh5m - (report.subagent.noExpiryAt5m + report.subagent.wakeCost)) < 1e-9);
+  // The 20-minute gap needs 4 check-ins, so the limit of 2 pays for 2 and the cache still expires.
+  assert.equal(report.subagent.wakes, 2);
+  assert.equal(report.subagent.avoided, 0);
+  assert.ok(Math.abs(sim.subagent.sims['check-2'] - (report.subagent.totalAt5m + report.subagent.wakeCost)) < 1e-9);
 });

@@ -16,6 +16,7 @@ const { recentLifetime } = require('./check-env');
 
 const LONG_BASH_MS = 270000;
 const MAIN_WAKE_LIMITS = [4, 12, 24];
+const SUBAGENT_CHECK_LIMITS = [1, 2, 3, 4];
 const PAUSE_MIN = 5;
 const PAUSE_MAX = 60;
 const LENGTH_BUCKETS = [
@@ -50,6 +51,7 @@ function longBashIds(text) {
 function emptyGroup() {
   const sims = { no5m: 0, no1h: 0, refresh5m: 0, refresh1h: 0 };
   for (const n of MAIN_WAKE_LIMITS) sims[`refresh5m-${n}`] = 0;
+  for (const n of SUBAGENT_CHECK_LIMITS) sims[`check-${n}`] = 0;
   return {
     totals: emptyTotals(), agents: 0, sims,
     agentPauses: [0, 0, 0, 0], pauseLengths: LENGTH_BUCKETS.map(() => 0),
@@ -76,6 +78,9 @@ function simulate(group, requests, fresh, isSubagent, longBash) {
       const series = (ttl, plan, covered, uncovered) => at(plan.covered ? covered : uncovered) + plan.wakes * wakeCost(price, context, ttl);
       if (isSubagent) {
         sims.refresh5m += series('5m', wakePlan(gap, { threshold: PAUSE_MIN, interval: SUBAGENT_WAKE_MIN }), 'hit', '5m');
+        for (const n of SUBAGENT_CHECK_LIMITS) {
+          sims[`check-${n}`] += series('5m', wakePlan(gap, { threshold: PAUSE_MIN, interval: SUBAGENT_WAKE_MIN, limit: n }), 'hit', '5m');
+        }
       } else {
         for (const n of MAIN_WAKE_LIMITS) {
           sims[`refresh5m-${n}`] += series('5m', wakePlan(gap, { threshold: PAUSE_MIN, interval: SUBAGENT_WAKE_MIN, limit: n }), 'hit', '5m');
@@ -131,7 +136,10 @@ function modeRows(group, isSubagent) {
   const actual = group.totals.total;
   const rows = [{ mode: 'Actual (measured requests, list prices)', cost: actual }];
   rows.push({ mode: '5 minutes, no refresh', cost: group.sims.no5m });
-  if (isSubagent) rows.push({ mode: '5 minutes, check-in every 4:30', cost: group.sims.refresh5m });
+  if (isSubagent) {
+    for (const n of SUBAGENT_CHECK_LIMITS) rows.push({ mode: `5 minutes, check-in every 4:30, up to ${n}`, cost: group.sims[`check-${n}`] });
+    rows.push({ mode: '5 minutes, check-in every 4:30, no limit', cost: group.sims.refresh5m });
+  }
   else for (const n of MAIN_WAKE_LIMITS) rows.push({ mode: `5 minutes, wake every 4:30, up to ${n}`, cost: group.sims[`refresh5m-${n}`] });
   rows.push({ mode: '1 hour, no refresh', cost: group.sims.no1h });
   if (!isSubagent) rows.push({ mode: `1 hour, wake every 59 min, up to ${MAIN_MAX_WAKES}`, cost: group.sims.refresh1h });

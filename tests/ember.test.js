@@ -8,7 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { decide, DEFAULT_CAP_MS } = require('../hooks/cap-subagent-wait');
-const { decide: decidePoll, MAX_CHECKS } = require('../hooks/poll-after-move');
+const { decide: decidePoll } = require('../hooks/poll-after-move');
 const { shouldSleep, deadlineFor, isStale } = require('../hooks/rewake');
 const { lastCacheTtl, transcriptTail } = require('../hooks/ember-lib');
 const { parseTranscript, addTranscript, emptyTotals, missRate5m, whatIf, priceFor, analyze, format } = require('../scripts/cache-report');
@@ -53,7 +53,8 @@ test('tells a subagent to keep checking only after its foreground command moved'
   const context = moved({ command: 'x' }, { stdout: '', backgroundTaskId: 'b1' }).hookSpecificOutput.additionalContext;
   assert.match(context, /timeout parameter to 270000/);
   assert.match(context, /timeout 240 sh -c/);
-  assert.match(context, new RegExp(`After ${MAX_CHECKS} checks`));
+  assert.match(context, /Check on it once/);
+  assert.match(context, /do not check again/);
   assert.ok(moved({ command: 'x' }, JSON.stringify({ backgroundTaskId: 'b1' })));
   assert.equal(moved({ command: 'x' }, { stdout: 'done' }), null);
   assert.equal(moved({ command: 'x', run_in_background: true }, { backgroundTaskId: 'b1' }), null, 'a chosen background command may be a service');

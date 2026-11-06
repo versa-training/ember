@@ -92,13 +92,14 @@ Options (simulated unless marked measured):
 | Main | 1 hour, with refresh | $4,177 (up to 4 wakes; newer run, same note as above) |
 | Subagents | 5 minutes, no refresh | $6,417 (measured) |
 | Subagents | 5 minutes, with refresh | $5,633 |
+| Subagents | 5 minutes, up to 2 refreshes | $5,988 against $6,782 with no refresh (newer run, 38 days to 2026-11-06). The limit that ember uses; no limit gives $5,959 |
 | Subagents | 1 hour, no refresh | $6,559 |
 | Subagents | 1 hour, with refresh | not simulated |
 
 ## 7. The rule
 
 - Main agent: 1 hour, with an optional wake at 59 minutes.
-- Subagents: 5 minutes. Check-ins about every 4 minutes during a long command need `EMBER_SUBAGENT=1`.
+- Subagents: 5 minutes, with two refreshes during a long command. They need `EMBER_SUBAGENT=1`.
 
 Why not request 1 hour only when a wait is coming: 1-hour entries must come before 5-minute entries in the prompt, so the cached prefix would probably be rewritten at 2x. This is an untested inference.
 

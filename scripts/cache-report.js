@@ -50,6 +50,7 @@ const WAKE_OUTPUT_TOKENS = 50;
 const SUBAGENT_WAKE_MIN = 4.5;
 const MAIN_WAKE_MIN = { '5m': 4.5, '1h': 59 };
 const MAIN_MAX_WAKES = 4;
+const SUBAGENT_MAX_CHECKS = 2;
 const TTL_MIN = { '5m': 5, '1h': 59 };
 
 // promptTokens (input, cache reads, and cache writes) picks the tier of a model priced by prompt length.
@@ -191,7 +192,7 @@ function addTranscript(totals, requests, isSubagent, seen) {
         const extra = rewritten * (writePrice - price.read / 1e6);
         // The plugin wakes a main agent on either lifetime, up to the wake limit.
         const plan = isSubagent
-          ? wakePlan(gap, { threshold: TTL_MIN['5m'], interval: SUBAGENT_WAKE_MIN })
+          ? wakePlan(gap, { threshold: TTL_MIN['5m'], interval: SUBAGENT_WAKE_MIN, limit: SUBAGENT_MAX_CHECKS })
           : wakePlan(gap, { threshold: TTL_MIN[ttl], interval: MAIN_WAKE_MIN[ttl], limit: MAIN_MAX_WAKES });
         const { needed, wakes } = plan;
         totals.wakes += wakes;
@@ -331,5 +332,5 @@ if (require.main === module) process.exit(main());
 
 module.exports = {
   listTranscripts, skippedLines, wakeCost, wakePlan, promptTokensOf, usd, percent,
-  MINIMUM_CONTEXT, SUBAGENT_WAKE_MIN, MAIN_WAKE_MIN, MAIN_MAX_WAKES,
+  MINIMUM_CONTEXT, SUBAGENT_WAKE_MIN, SUBAGENT_MAX_CHECKS, MAIN_WAKE_MIN, MAIN_MAX_WAKES,
   PRICES, PRICES_DATE, usageOf, missRate5m, whatIf, parseTranscript, addTranscript, emptyTotals, priceFor, format, analyze };
