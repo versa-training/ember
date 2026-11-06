@@ -18,8 +18,10 @@ function temporaryDir(t) {
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }
+// A developer's own EMBER_* settings must not change what the tests see.
+const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('EMBER_')));
 const run = (name, payload, env = {}) =>
-  spawnSync('node', [hook(name)], { input: JSON.stringify(payload), encoding: 'utf8', env: { ...process.env, ...env } });
+  spawnSync('node', [hook(name)], { input: JSON.stringify(payload), encoding: 'utf8', env: { ...cleanEnv, ...env } });
 
 function assistant(id, minute, usage, model = 'claude-opus-5-5', at = Date.UTC(2026, 0, 1, 0, minute)) {
   return JSON.stringify({
