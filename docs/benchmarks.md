@@ -43,3 +43,5 @@ The simulated wake rows use the plugin defaults: an interval of 270 seconds on a
 - Models without a listed price are skipped and listed.
 - Prices and cache behavior change on Anthropic's side. Record your Claude Code version (`check-env.js`) and the date with any result you share.
 - A pause of 5 to 60 minutes between requests counts whether the agent was waiting for a person or a tool.
+- The subagent check-in row leaves out the cost of denied calls. The hook denies by declared timeout, so it also denies commands that would finish quickly, and each denial adds at least one request. On the reference workload, 38 days to 2026-11-06, subagents made 14,202 foreground Bash calls with a timeout above 270 seconds, and 13.6% ran that long (measured). One extra context read per denied call costs $403.96 at API list prices, against a simulated saving of $790.03. If your commands declare long timeouts as a habit, turn the hook off with `EMBER_SUBAGENT=0`.
+- Savings can come in bursts. On the same workload one week of the 38 held 44% of the subagent pauses, so a short `--days` window can differ a lot from a long one.

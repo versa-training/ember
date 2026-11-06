@@ -87,7 +87,7 @@ These numbers come from a real heavy multi-agent workload, the reference workloa
 - Dates: 2026-09-29 to 2026-11-05. The same requests and pauses are assumed in every row.
 - Expiries cost $4,468.12 on 5 minutes (33.0%, range 32.1% to 35.0% depending on the expiry assumption) and $1,448.41 on the actual setup (13.4%). Both are simulated.
 - Simulated keepalive on the actual setup: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned).
-- Of that net, the main agent is $300.03 and subagent check-ins are $784.73. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it.
+- Of that net, the main agent is $300.03 and subagent check-ins are $784.73. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it. The figure also leaves out the cost of denied calls, which is large: see [docs/benchmarks.md](docs/benchmarks.md).
 - The report prints the 5-minute expiry cost as the row "Extra cost of expiries" under "Everything on 5 minutes".
 
 The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
@@ -149,6 +149,8 @@ ember reads the cache lifetime from your Claude Code configuration on every hook
 
 Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.claude/settings.local.json`, `<cwd>/.claude/settings.json`, `~/.claude/settings.json`. Files are read again on every call. A missing or malformed file is skipped, and a value other than `5m` or `1h` is ignored.
 
+**Wake limit**, first match: the limit set for the session with `/ember:wakes`, `EMBER_MAX_WAKES`, then 4. To change the default for every session, set `EMBER_MAX_WAKES` in the `env` block of your settings. A session limit stays until the session ends.
+
 **Intervals** follow the lifetime: 5 minutes gives 270 seconds, 1 hour gives 3540 seconds. A sleeping wake hook resolves the lifetime again about once a minute and just before it wakes. If you change a settings file while it sleeps, the deadline moves, counted from the hook's start. Limit: a hook keeps the environment it started with, so a variable changed during a session is not seen. Settings files are.
 
 `node scripts/check-env.js` prints the lifetime, interval, and wake limit per agent type with the source of each value. When the transcript and the configuration disagree, it says so.
@@ -191,11 +193,12 @@ The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout ab
 - The deny text includes a polling command, because a call that starts with `sleep` is rejected by Claude Code and a subagent that ends its turn waits for the finish notification without a request.
 - A foreground subagent that runs longer than the main agent's lifetime cannot be helped: the main agent is inside one turn, so no Stop hook fires and its cache expires.
 - It denies the call and does not shorten it, because a test showed a shortened timeout killed the command with exit code 143.
+- It judges the declared timeout, not how long the command runs, so a denied call often would have finished quickly. Each denial adds at least one request. The saving figures do not count this cost: see [docs/benchmarks.md](docs/benchmarks.md).
 
 **Wake hook**
 
 - It wakes at most 4 times before the limit resets, on a 5-minute or 1-hour main lifetime. A subagent cannot be woken by a hook: a hook wake goes to the main session only (tested).
-- The limit resets on every `UserPromptSubmit` event. The Claude Code docs say that event also fires on some turns Claude Code starts on its own, so the limit can reset on those too. This is untested.
+- The limit resets on every `UserPromptSubmit` event, except the one a wake itself fires. A task notification fires that event too, so it also resets the limit (tested below).
 - The sleep ends one interval after the hook starts, because the transcript at Stop can lack the current turn. A final response that streams for more than 60 seconds can therefore let the cache expire before the wake (about 0.13% of final turns on the reference workload).
 - A newer Stop or prompt ends the sleep within about 5 seconds.
 - A wake that would come more than 60 seconds late, for example after a laptop suspend, is skipped because the cache has probably expired already.
@@ -218,6 +221,13 @@ The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout ab
 - A foreground subagent longer than 5 minutes: the main agent's next request came 489 seconds later with a full rewrite, because no Stop hook fires during a turn.
 - Configuration: with both lifetimes at `1h`, `check-env.js` and the first sleeper deadline gave 3540 seconds and a 590000 ms subagent timeout was allowed. Editing `promptCacheTtl` in a settings file from `5m` to `1h` while a sleeper ran moved its deadline from 270 to 3540 seconds and `check-env.js` followed.
 - A hook cannot wake a subagent. A throwaway `asyncRewake` hook on `PreToolUse` and `SubagentStop` woke the main session only.
+
+**Live tests of 0.4.0.** Claude Code 2.1.310, haiku, headless stream-json, the plugin installed at user scope, `EMBER_MAIN_INTERVAL_SEC` of 6, one run each.
+
+- `EMBER_MAX_WAKES=6` in the `env` block of the user settings: 6 wakes, then none.
+- A session told "I only want 2 wakes" used `/ember:wakes` and got 2 wakes, then none.
+- `EMBER_SUBAGENT=0` in the same `env` block: a subagent's foreground Bash call with a 600000 ms timeout ran without a denial.
+- Task notifications, `--plugin-dir`, interval 25 seconds, limit of 3: 3 wakes, a notification, then 3 more wakes.
 
 **Untested.** Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
 
