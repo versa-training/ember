@@ -63,7 +63,7 @@ Same data throughout: 2026-09-29 to 2026-11-05, 157,267 requests, one heavy mult
 | Main 1 hour, subagents 5 minutes (actual use) | $4,377.05 (measured) | $6,417.45 (measured) | $10,794.50 | expiry $1,448.41, 13.4% |
 | Everything on 1 hour | $4,377.05 (measured) | $6,558.98 (simulated) | $10,936.03 | |
 
-Keepalive added to the main-1-hour setup, simulated: keepalive cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned).
+Main agent wake added to the main-1-hour setup, simulated: net $300.03 ($224.46 if sessions are abandoned), which leaves expiry plus wakes at $1,148 of a $10,494 total (10.9%). With subagent check-ins turned on as well: keepalive cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned), before the cost of refused calls in `docs/benchmarks.md`.
 
 A pause is 5 to 60 minutes between consecutive requests, followed by another request. Cost per agent, by number of pauses (all values simulated):
 

@@ -88,8 +88,8 @@ These numbers come from a real heavy multi-agent workload, the reference workloa
 
 - Dates: 2026-09-29 to 2026-11-05. The same requests and pauses are assumed in every row.
 - Expiries cost $4,468.12 on 5 minutes (33.0%, range 32.1% to 35.0% depending on the expiry assumption) and $1,448.41 on the actual setup (13.4%). Both are simulated.
-- Simulated keepalive on the actual setup: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned).
-- Of that net, the main agent is $300.03 and subagent check-ins are $784.73. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it. The figure also leaves out the cost of denied calls, which is large: see [docs/benchmarks.md](docs/benchmarks.md).
+- Simulated keepalive on the actual setup, main agent wake only: net $300.03 ($224.46 if sessions are abandoned). Expiry plus wakes are then $1,148 of a $10,494 total (10.9%).
+- With subagent check-ins turned on as well: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned). The check-ins are $784.73 of that net. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it. The figure also leaves out the cost of denied calls, which is large: see [docs/benchmarks.md](docs/benchmarks.md).
 - The report prints the 5-minute expiry cost as the row "Extra cost of expiries" under "Everything on 5 minutes".
 
 The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
@@ -105,7 +105,7 @@ Two small hooks. The wake hook is on. The subagent hook is off unless you set `E
 | Subagent hook, off by default | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30. On a 1-hour subagent cache the limit is 59 minutes |
 | Wake hook | Your main agent, on a 5-minute or 1-hour cache | A wake just before the cache expires (4:30 or 59 minutes), at most 4 between your prompts |
 
-**The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). The hooks add less: a net $1,084.76 (simulated).
+**The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). The main agent wake adds less: a net $300.03 (simulated).
 
 ## Which setup should you use
 
