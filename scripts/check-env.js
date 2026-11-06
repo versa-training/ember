@@ -86,8 +86,8 @@ function resolvedLines(lifetime, env = process.env, cwd = process.cwd()) {
     `  main agent wake interval: ${mainInterval.seconds ?? 'none'} seconds (${mainInterval.source})`,
     `  main agent wake limit: ${wakes.value} (${wakes.source})`,
     `  subagent lifetime: ${sub.ttl} (${sub.source})`,
-    `  subagent hook: ${env.EMBER_SUBAGENT === '1' ? 'on' : 'off (EMBER_SUBAGENT=1 turns it on)'}`,
-    `  subagent foreground Bash timeout cap when on: ${wait.ms / 1000} seconds (${wait.source})`,
+    `  subagent refreshes: ${env.EMBER_SUBAGENT === '0' ? 'off (EMBER_SUBAGENT=0)' : 'on'}`,
+    `  subagent foreground Bash timeout cap: ${wait.ms / 1000} seconds (${wait.source})`,
     `  subagent wake limit: not applicable, subagents are not woken`,
   ];
 }

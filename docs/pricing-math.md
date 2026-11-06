@@ -99,7 +99,7 @@ Options (simulated unless marked measured):
 ## 7. The rule
 
 - Main agent: 1 hour, with an optional wake at 59 minutes.
-- Subagents: 5 minutes, with two refreshes during a long command. They need `EMBER_SUBAGENT=1`.
+- Subagents: 5 minutes, with two refreshes during a long command.
 
 Why not request 1 hour only when a wait is coming: 1-hour entries must come before 5-minute entries in the prompt, so the cached prefix would probably be rewritten at 2x. This is an untested inference.
 

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 'use strict';
 
-// PreToolUse on Bash, off unless EMBER_SUBAGENT=1. A subagent's foreground Bash call
+// PreToolUse on Bash. EMBER_SUBAGENT=0 turns it off. A subagent's foreground Bash call
 // that outlives the 5-minute cache forces a full rewrite on the next request, and a
 // long declared timeout stops Claude Code from moving the command to the background.
 // The timeout is lowered to the cap, so a long command moves there and short commands
 // cost nothing. poll-after-move.js takes over after the move.
 
-const { readStdin } = require('./ember-lib');
+const { readStdin, isOff } = require('./ember-lib');
 const config = require('./ember-config');
 
 const DEFAULT_CAP_MS = config.INTERVAL_SEC['5m'] * 1000;
@@ -25,7 +25,7 @@ function decide(payload, capMs, env = process.env) {
 }
 
 if (require.main === module) {
-  if (process.env.EMBER_SUBAGENT !== '1') process.exit(0);
+  if (isOff('EMBER_SUBAGENT')) process.exit(0);
   let payload;
   try {
     payload = JSON.parse(readStdin());

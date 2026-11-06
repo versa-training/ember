@@ -12,7 +12,7 @@
 <tr>
 <td align="center" width="33.3%"><h3>33%</h3>of Claude cost goes to expired caches on default API settings<br><sub>simulated on <a href="#the-problem">a heavy multi-agent workload</a></sub></td>
 <td align="center" width="33.3%"><h3>13.4%</h3>on the same workload with one setting: main agent on 1hr cache TTL<br></td>
-<td align="center" width="33.3%"><h3>3.7%</h3>with ember keeping main agents and subagents fresh<br><sub>subagent refreshes need <code>EMBER_SUBAGENT=1</code></sub></td>
+<td align="center" width="33.3%"><h3>3.7%</h3>with ember keeping main agents and subagents fresh<br></td>
 </tr>
 </table>
 
@@ -90,7 +90,7 @@ These numbers come from a real heavy multi-agent workload, the reference workloa
 - Expiries cost $4,468.12 on 5 minutes (33.0%, range 32.1% to 35.0% depending on the expiry assumption) and $1,448.41 on the actual setup (13.4%). Both are simulated.
 - Simulated keepalive on the actual setup, main agent wake only: net $300.03 ($224.46 if sessions are abandoned). Expiry plus wakes are then $1,148 of a $10,494 total (10.9%).
 - With two subagent refreshes as well, on a newer run (38 days to 2026-11-06, total $11,259.70): cost $118.77, expiry avoided $1,195.81, net $1,077.04 ($998.52 if sessions are abandoned), which is 9.6% of the total. Expiry plus wakes are then $377 of a $10,183 total (3.7%). The refreshes are $763.71 of that net.
-- Those figures count every subagent pause. $130.90 of the $917.63 subagent expiry cost (14.3%) does not follow a long Bash timeout, so check-ins may not reach it. Without it the net is $946.14 and the share is 4.9%.
+- Those figures count every subagent pause. $130.90 of the $917.63 subagent expiry cost (14.3%) does not follow a long Bash timeout, so refreshes may not reach it. Without it the net is $946.14 and the share is 4.9%.
 - The report prints the 5-minute expiry cost as the row "Extra cost of expiries" under "Everything on 5 minutes".
 
 The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
@@ -99,11 +99,11 @@ The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
 
 ## What ember does
 
-Small hooks, in two parts. The main agent wake is on. Subagent check-ins are off unless you set `EMBER_SUBAGENT=1`.
+Small hooks, in two parts, both on: wakes for your main agent and refreshes for your subagents.
 
 | Hook | Who it helps | What it does |
 | --- | --- | --- |
-| Subagent refreshes, off by default | Subagents on a 5-minute cache | With `EMBER_SUBAGENT=1`, a command that runs past 4:30 moves to the background and your subagent refreshes its cache twice: at the move and about 4 minutes later. Shorter commands are not touched. Without it, nothing happens and the cache can expire during a long command |
+| Subagent refreshes | Subagents on a 5-minute cache | A command that runs past 4:30 moves to the background, and your subagent refreshes its cache twice: at the move and about 4 minutes later. Shorter commands are not touched. Two refreshes cover 95.9% of subagent pauses on the reference workload. `EMBER_SUBAGENT=0` turns this off |
 | Wake hook | Your main agent, on a 5-minute or 1-hour cache | A wake just before the cache expires (4:30 or 59 minutes), at most 4 between your prompts |
 
 **The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). ember adds less: a net $1,077.04 (simulated, 38 days to 2026-11-06).
@@ -112,10 +112,10 @@ Small hooks, in two parts. The main agent wake is on. Subagent check-ins are off
 
 | Your usage | Main agent | Subagents | Why (simulated, reference workload) |
 | --- | --- | --- | --- |
-| Long interactive sessions, API key | 1 hour, wake hook optional | 5 minutes, `EMBER_SUBAGENT=1` | Main agents with 4 or more pauses: $6,413.58 on 5 minutes vs. $3,593.25 on 1 hour |
+| Long interactive sessions, API key | 1 hour, wake hook optional | 5 minutes, subagent refreshes | Main agents with 4 or more pauses: $6,413.58 on 5 minutes vs. $3,593.25 on 1 hour |
 | Short one-shot agents | 5 minutes | 5 minutes | Main agents with no pause: $335.68 on 5 minutes vs. $415.39 on 1 hour. 76.8% of main agents and 86.4% of subagents never hit a pause |
-| Mostly subagents that wait often | 1 hour | `subagentPromptCacheTtl` at `1h` | Subagents with 4 or more pauses: $1,238.51 on 5 minutes vs. $703.36 on 1 hour. Past 67.5 minutes of total waiting, the 1-hour premium is cheaper than check-ins. Over all subagents the two are close: $6,417.45 (measured) vs. $6,558.98 |
-| Subscription | Run the estimate, then decide | Run the estimate, then decide | Dollars are an equivalent, not a bill. Wakes use plan quota, and the savings are not proven there. `EMBER_MAIN=0` turns wakes off |
+| Mostly subagents that wait often | 1 hour | `subagentPromptCacheTtl` at `1h` | Subagents with 4 or more pauses: $1,238.51 on 5 minutes vs. $703.36 on 1 hour. Past 67.5 minutes of total waiting, the 1-hour premium is cheaper than refreshes. Over all subagents the two are close: $6,417.45 (measured) vs. $6,558.98 |
+| Subscription | Run the estimate, then decide | Run the estimate, then decide | Dollars are an equivalent, not a bill. Wakes use plan quota, and the savings are not proven there. `EMBER_MAIN=0` turns wakes off, `EMBER_SUBAGENT=0` turns subagent refreshes off |
 
 Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write costs 2x against 1.25x, and it pays off only when your agent comes back. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with two refreshes during a long command. See [docs/pricing-math.md](docs/pricing-math.md).
 
@@ -164,9 +164,9 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `EMBER_MAIN=0` | on | Turns off the Stop hook wakes |
-| `EMBER_SUBAGENT=1` | off | Turns on subagent check-ins |
+| `EMBER_SUBAGENT=0` | on | Turns off subagent refreshes |
 | `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL` | unset | Test overrides of the resolved lifetime (`5m` or `1h`). Leave them unset |
-| `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | With check-ins on, a longer foreground Bash timeout in a subagent is lowered to this. Overrides exactly |
+| `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | A longer foreground Bash timeout in a subagent is lowered to this. Overrides exactly |
 | `EMBER_MAIN_INTERVAL_SEC` | from the lifetime: 270 or 3540 | Seconds between wakes. Overrides exactly. Setting it skips the transcript wait, and a headless run may then wait for a pending sleeper before it exits |
 | `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets. A limit set with `/ember:wakes` wins for that session |
 | `EMBER_WAKE_MESSAGE` | `ember keepalive: ...` | Text of the wake turn |
@@ -184,12 +184,12 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 
 ## How it works
 
-Subagent check-ins, when turned on, are two hooks. A `PreToolUse` hook lowers a foreground Bash timeout above the subagent's interval to that interval (270 seconds on a 5-minute cache), because Claude Code does not move a command with a long declared timeout to the background. A `PostToolUse` hook sees the move and tells the subagent to check once. The check waits without using tokens, and the request after it refreshes the cache. So a long command gets two refreshes: at the move and after the check. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
+Subagent refreshes are two hooks. A `PreToolUse` hook lowers a foreground Bash timeout above the subagent's interval to that interval (270 seconds on a 5-minute cache), because Claude Code does not move a command with a long declared timeout to the background. A `PostToolUse` hook sees the move and tells the subagent to check once. The check waits without using tokens, and the request after it refreshes the cache. So a long command gets two refreshes: at the move and after the check. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
 
 <details>
 <summary>Hook details and test status</summary>
 
-**Subagent check-ins** (off by default)
+**Subagent refreshes**
 
 - It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed.
 - On a 1-hour subagent lifetime the limit is 3540 seconds, so a timeout is almost never lowered.
@@ -227,20 +227,18 @@ Subagent check-ins, when turned on, are two hooks. A `PreToolUse` hook lowers a 
 
 - `EMBER_MAX_WAKES=6` in the `env` block of the user settings: 6 wakes, then none.
 - A session told "I only want 2 wakes" used `/ember:wakes` and got 2 wakes, then none.
-- `EMBER_SUBAGENT` unset: a subagent's foreground Bash call with a 600000 ms timeout ran unchanged.
+- `EMBER_SUBAGENT=0`: a subagent's foreground Bash call with a 600000 ms timeout ran unchanged.
 - Task notifications, `--plugin-dir`, interval 25 seconds, limit of 3: 3 wakes, a notification, then 3 more wakes.
 
-**Live tests of 0.6.0, subagent check-ins.** Haiku, headless stream-json, 5-minute subagent lifetime, `EMBER_SUBAGENT=1`, a 460 to 560 second command, one run each.
+**Live tests of 0.6.0, subagent refreshes.** Haiku, headless stream-json, 5-minute subagent lifetime, a 460 to 560 second command unless noted, one run each.
 
 - Foreground subagent on 2.1.310, background subagent on 2.1.310, and foreground subagent on 2.1.318, all with a 600000 ms timeout: the command moved at 270 seconds, the subagent checked until it ended (an earlier text with no limit of one check), the longest gap was 273 seconds, and every request after a gap was a cache hit.
 - No declared timeout on 2.1.310: the command moved at 120 seconds, the longest gap was 243 seconds, all cache hits.
 - A 20-second command with a 600000 ms timeout: returned normally, with no move and no check.
 - Control with the hooks off: the 600000 ms call ran 560 seconds and the next request rewrote the context. With no timeout, the command moved at 120 seconds, the subagent went idle, and after a 434-second gap the next request read 0 from the cache.
-- Before this design: with 0.3.0 the hook refused long timeouts, and that cost a request on every refused call.
-
 - The limit of one check, on 2.1.310 with the cap set to 60 seconds and a 150-second command: the command moved at 60 seconds, the subagent checked once and ended its turn, and the finish notification woke it. Every request was a cache hit.
 
-**Untested.** Subagent check-ins in an interactive session. Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
+**Untested.** Subagent refreshes in an interactive session, and on models other than haiku. Claude Code handles the move and the hooks the same way for any model, and a model that ignores the instruction only loses the refresh. Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
 
 </details>
 
@@ -264,7 +262,7 @@ The commenter [bcherny](https://github.com/anthropics/claude-code/issues/46829#i
 
 **Newer versions may already cover part of this.**
 
-- Claude Code 2.1.318 changelog: "Changed background subagents to move a shell command to the background after 3 minutes on all providers, so the prompt cache doesn't expire while it runs".
+- Claude Code 2.1.318 changelog: "Changed background subagents to move a shell command to the background after 3 minutes on all providers, so the prompt cache doesn't expire while it runs". In a test on 2.1.318 a command with a 600000 ms timeout did not move in 220 seconds, and a command with no timeout moved at 120 seconds. So ember still lowers long timeouts.
 - Claude Code 2.1.314 changelog: "Added idle compaction to VS Code and Claude Desktop's Code tab: a 200K+ token conversation left idle is summarized, and the summary is used on your next message if the prompt cache has expired".
 
 **The figures are simulated.** They come from one workload at API list prices. They are not a real bill, and yours will differ. No result is guaranteed.

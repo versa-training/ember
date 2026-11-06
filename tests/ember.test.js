@@ -62,10 +62,10 @@ test('tells a subagent to keep checking only after its foreground command moved'
   assert.equal(moved({ command: 'x' }, 'not json'), null);
 });
 
-test('the check-in hook is off by default', () => {
+test('the check-in hook is on by default and EMBER_SUBAGENT=0 turns it off', () => {
   const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x' }, tool_response: { backgroundTaskId: 'b1' } };
-  assert.equal(run('poll-after-move.js', payload).stdout, '');
-  assert.equal(JSON.parse(run('poll-after-move.js', payload, { EMBER_SUBAGENT: '1' }).stdout).hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.equal(JSON.parse(run('poll-after-move.js', payload).stdout).hookSpecificOutput.hookEventName, 'PostToolUse');
+  assert.equal(run('poll-after-move.js', payload, { EMBER_SUBAGENT: '0' }).stdout, '');
 });
 
 test('leaves the main agent, short waits, and background commands alone', () => {
@@ -76,10 +76,9 @@ test('leaves the main agent, short waits, and background commands alone', () => 
   assert.equal(decide({ agent_id: 'a', tool_name: 'Bash', tool_input: { ...long, run_in_background: true } }, DEFAULT_CAP_MS), null);
 });
 
-test('the cap hook is off by default and prints valid hook output when turned on', () => {
+test('the cap hook is on by default, prints valid hook output, and EMBER_SUBAGENT=0 turns it off', () => {
   const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x', timeout: 590000 } };
-  assert.equal(JSON.parse(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '1' }).stdout).hookSpecificOutput.hookEventName, 'PreToolUse');
-  assert.equal(run('cap-subagent-wait.js', payload).stdout, '');
+  assert.equal(JSON.parse(run('cap-subagent-wait.js', payload).stdout).hookSpecificOutput.hookEventName, 'PreToolUse');
   assert.equal(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '0' }).stdout, '');
 });
 

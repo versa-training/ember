@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 'use strict';
 
-// PostToolUse on Bash, off unless EMBER_SUBAGENT=1. When Claude Code moves a subagent's
+// PostToolUse on Bash. EMBER_SUBAGENT=0 turns it off. When Claude Code moves a subagent's
 // command to the background, a subagent that ends its turn sends no request until the
 // finish notification, so its cache can expire. A hook cannot wake a subagent, so this
 // tells it to check once: the check that returns leads to a request, which refreshes
 // the cache. A check uses no tokens while it waits. The move and one check are two
 // refreshes, which covers 95.9% of subagent pauses on the reference workload.
 
-const { readStdin } = require('./ember-lib');
+const { readStdin, isOff } = require('./ember-lib');
 const config = require('./ember-config');
 
 function responseOf(payload) {
@@ -40,7 +40,7 @@ function decide(payload, capMs) {
 }
 
 if (require.main === module) {
-  if (process.env.EMBER_SUBAGENT !== '1') process.exit(0);
+  if (isOff('EMBER_SUBAGENT')) process.exit(0);
   let payload;
   try {
     payload = JSON.parse(readStdin());
