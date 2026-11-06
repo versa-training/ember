@@ -63,6 +63,7 @@ function readState(sessionId) {
     if (!nonNegativeInteger(parsed?.generation) || !nonNegativeInteger(parsed?.wakes)) return defaults;
     const state = { generation: parsed.generation, wakes: parsed.wakes };
     if (Number.isFinite(parsed.pendingWakeAt)) state.pendingWakeAt = parsed.pendingWakeAt;
+    if (nonNegativeInteger(parsed.maxWakes)) state.maxWakes = parsed.maxWakes;
     return state;
   } catch {
     return defaults;

@@ -95,9 +95,9 @@ function main() {
   if (!sessionId || payload.agent_id) return 0;
 
   const intervalOverride = intEnv('EMBER_MAIN_INTERVAL_SEC', null);
-  const maxWakes = config.maxWakes().value;
   const state = readState(sessionId);
   if (!state) return 0;
+  const maxWakes = state.maxWakes ?? config.maxWakes().value;
   const startMs = Date.now();
   const settingsCwd = payload.cwd || process.cwd();
   const explicit = config.explicitMainLifetime();

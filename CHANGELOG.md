@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- A session can have its own wake limit. `/ember:wakes <count>` or `scripts/set-wakes.js <count>` stores it in the session's state file, where it wins over `EMBER_MAX_WAKES` and stays until the session ends.
+
 ## 0.3.0
 
 - ember adapts to the configured cache lifetime per agent type. One resolver, `hooks/ember-config.js`, is read fresh on every hook call and by `scripts/check-env.js`. Main agent: `EMBER_MAIN_TTL`, the newest cache write in the transcript, `FORCE_PROMPT_CACHING_5M`, `CLAUDE_CODE_PROMPT_CACHE_TTL`, `promptCacheTtl`, `ENABLE_PROMPT_CACHING_1H`. Subagents: `EMBER_SUBAGENT_TTL`, the force switch, `CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL`, `subagentPromptCacheTtl`, the hour switch, then 5 minutes. Settings files include managed settings and `env` blocks.

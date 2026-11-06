@@ -21,4 +21,5 @@ const fromWake = state.pendingWakeAt && Date.now() - state.pendingWakeAt < WAKE_
 writeState(payload.session_id, {
   generation: state.generation + 1,
   wakes: fromWake ? state.wakes : 0,
+  ...(state.maxWakes === undefined ? {} : { maxWakes: state.maxWakes }),
 });

@@ -4,7 +4,7 @@
 
 **Your coding agent's memory goes cold while it waits. ember keeps it warm, powered by [versa](https://versa.training)**
 
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.3.0-blue?style=flat-square" alt="version"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.0-blue?style=flat-square" alt="version"></a>
 <a href="#find-out-what-it-costs-you"><img src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square" alt="Claude Code plugin"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT license"></a>
 
@@ -126,6 +126,7 @@ Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write 
 | --- | --- |
 | `/ember:benchmark` | Runs `scripts/check-env.js` and `scripts/estimate-savings.js` and interprets them. Reads history only, starts no agent |
 | `/ember:report` | Prints the cost report |
+| `/ember:wakes <count>` | Sets the wake limit for this session. You can also tell your agent, for example "12 wakes". `0` turns wakes off |
 | `node scripts/estimate-savings.js --days N` | Estimates each cache mode on your history (simulated, free) |
 | `node scripts/cache-report.js --days N --dir PATH --json` | Runs the report from a clone |
 | `node scripts/check-env.js` | Prints the Claude Code version, the cache lifetime in recent transcripts, and relevant environment variables |
@@ -162,7 +163,7 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 | `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL` | unset | Test overrides of the resolved lifetime (`5m` or `1h`). Leave them unset |
 | `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | Longest foreground Bash timeout a subagent may use. Overrides exactly |
 | `EMBER_MAIN_INTERVAL_SEC` | from the lifetime: 270 or 3540 | Seconds between wakes. Overrides exactly. Setting it skips the transcript wait, and a headless run may then wait for a pending sleeper before it exits |
-| `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets |
+| `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets. A limit set with `/ember:wakes` wins for that session |
 | `EMBER_WAKE_MESSAGE` | `ember keepalive: ...` | Text of the wake turn |
 | `EMBER_STATE_DIR` | `~/.claude/ember` | Where wake state is stored. It must be a real directory you own, not a symlink, or the hooks do nothing |
 | `EMBER_LOG`, `EMBER_RESOLVE_MS`, `EMBER_TRANSCRIPT_ROOT` | unset | Testing aids: a file that records each sleeper deadline, the re-resolve period in milliseconds, and the folder `check-env.js` reads transcripts from |

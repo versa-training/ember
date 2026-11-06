@@ -89,6 +89,32 @@ test('rewake exits 2 with the message, then a newer generation cancels it', asyn
   assert.equal(limited.stderr, '');
 });
 
+test('a session wake limit wins over EMBER_MAX_WAKES and survives a prompt', (t) => {
+  const dir = temporaryDir(t);
+  const transcript = path.join(dir, 't.jsonl');
+  fs.writeFileSync(transcript, `${assistant('m1', 0, write1h(0, 100), undefined, Date.now())}\n`);
+  const env = { EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '0', CLAUDE_CODE_SESSION_ID: 's' };
+  const setWakes = (...args) => spawnSync('node', [path.join(__dirname, '..', 'scripts', 'set-wakes.js'), ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+  const stop = (extra = {}) => run('rewake.js', { session_id: 's', transcript_path: transcript }, { ...env, ...extra });
+
+  assert.match(setWakes().stdout, /up to \d+ wakes/);
+  assert.equal(setWakes('1').status, 0);
+  assert.match(setWakes().stdout, /up to 1 wakes.*set for this session/);
+  assert.equal(stop({ EMBER_MAX_WAKES: '0' }).status, 2, 'the session limit overrides the environment');
+  assert.equal(stop({ EMBER_MAX_WAKES: '9' }).status, 0, 'the session limit is reached');
+
+  run('reset-on-prompt.js', { session_id: 's' }, env);
+  run('reset-on-prompt.js', { session_id: 's' }, env);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).maxWakes, 1);
+  assert.equal(stop().status, 2, 'a prompt restarts the count under the same limit');
+
+  assert.equal(setWakes('0').status, 0);
+  assert.equal(stop().status, 0);
+  assert.equal(setWakes('-1').status, 1);
+  assert.equal(setWakes('many').status, 1);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 's.json'), 'utf8')).maxWakes, 0);
+});
+
 test('rewake does nothing for a subagent or when turned off', (t) => {
   const dir = temporaryDir(t);
   const env = { EMBER_STATE_DIR: dir, EMBER_MAIN_INTERVAL_SEC: '0' };
