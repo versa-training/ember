@@ -4,7 +4,7 @@
 
 **Your coding agent's memory goes cold while it waits. ember keeps it warm, powered by [versa](https://versa.training)**
 
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.4.0-blue?style=flat-square" alt="version"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="version"></a>
 <a href="#find-out-what-it-costs-you"><img src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square" alt="Claude Code plugin"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT license"></a>
 
@@ -12,7 +12,7 @@
 <tr>
 <td align="center" width="33.3%"><h3>33%</h3>of Claude cost goes to expired caches on default API settings<br><sub>simulated on <a href="#the-problem">a heavy multi-agent workload</a></sub></td>
 <td align="center" width="33.3%"><h3>13.4%</h3>on the same workload with one setting: main agent on 1hr cache TTL<br></td>
-<td align="center" width="33.3%"><h3>3.7%</h3>when keeping the cache fresh with <br>ember</br></td>
+<td align="center" width="33.3%"><h3>10.9%</h3>when keeping the main agent fresh with <br>ember</br></td>
 </tr>
 </table>
 
@@ -73,6 +73,8 @@ Claude caches your agent's context. On Opus 5.5 and Sonnet 5.5, a warm read cost
 
 ![The same work, three bills](assets/2-three-bills.png)
 
+The third bar includes subagent check-ins, which are off by default. With the main agent wake only, the bill is $10,494 and expiry plus wakes are $1,148 (10.9%), simulated.
+
 These numbers come from a real heavy multi-agent workload, the reference workload: 157,267 requests over 38 days, repriced at API list prices. They are simulated, not a real bill. Your numbers will differ.
 
 <details>
@@ -96,11 +98,11 @@ The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
 
 ## What ember does
 
-Two small hooks.
+Two small hooks. The wake hook is on. The subagent hook is off unless you set `EMBER_SUBAGENT=1`, because it also refuses many commands that would finish quickly.
 
 | Hook | Who it helps | What it does |
 | --- | --- | --- |
-| Subagent hook | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30. On a 1-hour subagent cache the limit is 59 minutes |
+| Subagent hook, off by default | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30. On a 1-hour subagent cache the limit is 59 minutes |
 | Wake hook | Your main agent, on a 5-minute or 1-hour cache | A wake just before the cache expires (4:30 or 59 minutes), at most 4 between your prompts |
 
 **The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). The hooks add less: a net $1,084.76 (simulated).
@@ -109,12 +111,12 @@ Two small hooks.
 
 | Your usage | Main agent | Subagents | Why (simulated, reference workload) |
 | --- | --- | --- | --- |
-| Long interactive sessions, API key | 1 hour, wake hook optional | 5 minutes, subagent hook | Main agents with 4 or more pauses: $6,413.58 on 5 minutes vs. $3,593.25 on 1 hour |
+| Long interactive sessions, API key | 1 hour, wake hook optional | 5 minutes | Main agents with 4 or more pauses: $6,413.58 on 5 minutes vs. $3,593.25 on 1 hour |
 | Short one-shot agents | 5 minutes | 5 minutes | Main agents with no pause: $335.68 on 5 minutes vs. $415.39 on 1 hour. 76.8% of main agents and 86.4% of subagents never hit a pause |
-| Mostly subagents that wait often | 1 hour | `subagentPromptCacheTtl` at `1h`, with `EMBER_SUBAGENT=0` | Subagents with 4 or more pauses: $1,238.51 on 5 minutes vs. $703.36 on 1 hour. Past 67.5 minutes of total waiting, the 1-hour premium is cheaper than check-ins. Over all subagents the two are close: $6,417.45 (measured) vs. $6,558.98 |
+| Mostly subagents that wait often | 1 hour | `subagentPromptCacheTtl` at `1h` | Subagents with 4 or more pauses: $1,238.51 on 5 minutes vs. $703.36 on 1 hour. Past 67.5 minutes of total waiting, the 1-hour premium is cheaper than check-ins. Over all subagents the two are close: $6,417.45 (measured) vs. $6,558.98 |
 | Subscription | Run the estimate, then decide | Run the estimate, then decide | Dollars are an equivalent, not a bill. Wakes use plan quota, and the savings are not proven there. `EMBER_MAIN=0` turns wakes off |
 
-Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write costs 2x against 1.25x, and it pays off only when your agent comes back. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes with a check-in every 4:30 while waiting. See [docs/pricing-math.md](docs/pricing-math.md).
+Most short agents should stay on 5 minutes, as Anthropic argues. A 1-hour write costs 2x against 1.25x, and it pays off only when your agent comes back. The rule the math supports: main agent on 1 hour with an optional wake at 59 minutes, subagents on 5 minutes. See [docs/pricing-math.md](docs/pricing-math.md).
 
 ## Benchmark your own usage
 
@@ -161,7 +163,7 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `EMBER_MAIN=0` | on | Turns off the Stop hook wakes |
-| `EMBER_SUBAGENT=0` | on | Turns off the subagent hook |
+| `EMBER_SUBAGENT=1` | off | Turns on the subagent hook |
 | `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL` | unset | Test overrides of the resolved lifetime (`5m` or `1h`). Leave them unset |
 | `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | Longest foreground Bash timeout a subagent may use. Overrides exactly |
 | `EMBER_MAIN_INTERVAL_SEC` | from the lifetime: 270 or 3540 | Seconds between wakes. Overrides exactly. Setting it skips the transcript wait, and a headless run may then wait for a pending sleeper before it exits |
@@ -181,12 +183,12 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 
 ## How it works
 
-The subagent hook is a `PreToolUse` hook. It denies a foreground Bash timeout above the subagent's interval (270 seconds on a 5-minute cache) and tells the subagent to rerun in the background and keep polling. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
+The subagent hook, when turned on, is a `PreToolUse` hook. It denies a foreground Bash timeout above the subagent's interval (270 seconds on a 5-minute cache) and tells the subagent to rerun in the background and keep polling. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
 
 <details>
 <summary>Hook details and test status</summary>
 
-**Subagent hook**
+**Subagent hook** (off by default)
 
 - It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed.
 - On a 1-hour subagent lifetime the limit is 3540 seconds, so it effectively never denies.

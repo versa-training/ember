@@ -17,7 +17,7 @@ Flags: `--days N` (default 30, 0 reads everything and can take minutes on large 
 | --- | --- |
 | Actual | Your requests priced as they happened, at API list prices. |
 | 5 minutes, no refresh | Every cache write lives 5 minutes. |
-| 5 minutes, check-in every 4:30 | Subagents check in before the cache expires. For main agents the output simulates wakes every 4:30 with up to 4, 12, and 24 wakes. |
+| 5 minutes, check-in every 4:30 | Subagents check in before the cache expires, which needs `EMBER_SUBAGENT=1`. For main agents the output simulates wakes every 4:30 with up to 4, 12, and 24 wakes. |
 | 1 hour, no refresh | Every cache write lives 1 hour. |
 | 1 hour, wake every 59 min, up to 4 | Main agents only. This is what the Stop hook does. |
 

@@ -56,9 +56,10 @@ test('leaves the main agent, short waits, and background commands alone', () => 
   assert.equal(decide({ agent_id: 'a', tool_name: 'Bash', tool_input: { ...long, run_in_background: true } }, DEFAULT_CAP_MS), null);
 });
 
-test('the cap hook prints valid hook output and can be turned off', () => {
+test('the cap hook is off by default and prints valid hook output when turned on', () => {
   const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x', timeout: 590000 } };
-  assert.equal(JSON.parse(run('cap-subagent-wait.js', payload).stdout).hookSpecificOutput.hookEventName, 'PreToolUse');
+  assert.equal(JSON.parse(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '1' }).stdout).hookSpecificOutput.hookEventName, 'PreToolUse');
+  assert.equal(run('cap-subagent-wait.js', payload).stdout, '');
   assert.equal(run('cap-subagent-wait.js', payload, { EMBER_SUBAGENT: '0' }).stdout, '');
 });
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
-// PreToolUse on Bash. A subagent's foreground Bash call that outlives the
+// PreToolUse on Bash, off unless EMBER_SUBAGENT=1. A subagent's foreground Bash call that outlives the
 // 5-minute cache forces a full rewrite on the next request. The call is denied,
 // not shortened: a shorter Bash timeout can kill the running command.
 
-const { readStdin, isOff } = require('./ember-lib');
+const { readStdin } = require('./ember-lib');
 const config = require('./ember-config');
 
 const DEFAULT_CAP_MS = config.INTERVAL_SEC['5m'] * 1000;
@@ -34,7 +34,7 @@ function decide(payload, capMs, env = process.env) {
 }
 
 if (require.main === module) {
-  if (isOff('EMBER_SUBAGENT')) process.exit(0);
+  if (process.env.EMBER_SUBAGENT !== '1') process.exit(0);
   let payload;
   try {
     payload = JSON.parse(readStdin());

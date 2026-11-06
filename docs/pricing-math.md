@@ -98,7 +98,7 @@ Options (simulated unless marked measured):
 ## 7. The rule
 
 - Main agent: 1 hour, with an optional wake at 59 minutes.
-- Subagents: 5 minutes, and check in every 4:30 while waiting.
+- Subagents: 5 minutes. Check-ins every 4:30 need `EMBER_SUBAGENT=1`, and their cost is not in these figures: see `docs/benchmarks.md`.
 
 Why not request 1 hour only when a wait is coming: 1-hour entries must come before 5-minute entries in the prompt, so the cached prefix would probably be rewritten at 2x. This is an untested inference.
 

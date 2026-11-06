@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+- The subagent hook is off by default. `EMBER_SUBAGENT=1` turns it on. It judges a command by its declared timeout, so it refused many commands that would have finished quickly, and each refusal costs a request.
+- The headline figure is now 10.9% for the main agent wake alone. The 3.7% figure included subagent check-ins.
+
 ## 0.4.0
 
 - A session can have its own wake limit. `/ember:wakes <count>` or `scripts/set-wakes.js <count>` stores it in the session's state file, where it wins over `EMBER_MAX_WAKES` and stays until the session ends.
