@@ -8,6 +8,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const { decide, DEFAULT_CAP_MS } = require('../hooks/cap-subagent-wait');
+const { decide: decidePoll, MAX_CHECKS } = require('../hooks/poll-after-move');
 const { shouldSleep, deadlineFor, isStale } = require('../hooks/rewake');
 const { lastCacheTtl, transcriptTail } = require('../hooks/ember-lib');
 const { parseTranscript, addTranscript, emptyTotals, missRate5m, whatIf, priceFor, analyze, format } = require('../scripts/cache-report');
@@ -41,11 +42,29 @@ const write1h = (read, create) => ({
   cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: create },
 });
 
-test('denies a long foreground Bash timeout in a subagent and never shortens it', () => {
+test('lowers a long foreground Bash timeout in a subagent to the cap and sets no permission decision', () => {
   const output = decide({ agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x', timeout: 590000 } }, DEFAULT_CAP_MS);
-  assert.equal(output.hookSpecificOutput.permissionDecision, 'deny');
-  assert.match(output.hookSpecificOutput.permissionDecisionReason, /run_in_background: true/);
-  assert.equal(output.hookSpecificOutput.updatedInput, undefined);
+  assert.deepEqual(output.hookSpecificOutput.updatedInput, { command: 'x', timeout: DEFAULT_CAP_MS });
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined);
+});
+
+test('tells a subagent to keep checking only after its foreground command moved', () => {
+  const moved = (input, response, extra = {}) => decidePoll({ agent_id: 'a', tool_name: 'Bash', tool_input: input, tool_response: response, ...extra }, DEFAULT_CAP_MS);
+  const context = moved({ command: 'x' }, { stdout: '', backgroundTaskId: 'b1' }).hookSpecificOutput.additionalContext;
+  assert.match(context, /timeout parameter to 270000/);
+  assert.match(context, /timeout 240 sh -c/);
+  assert.match(context, new RegExp(`After ${MAX_CHECKS} checks`));
+  assert.ok(moved({ command: 'x' }, JSON.stringify({ backgroundTaskId: 'b1' })));
+  assert.equal(moved({ command: 'x' }, { stdout: 'done' }), null);
+  assert.equal(moved({ command: 'x', run_in_background: true }, { backgroundTaskId: 'b1' }), null, 'a chosen background command may be a service');
+  assert.equal(moved({ command: 'x' }, { backgroundTaskId: 'b1' }, { agent_id: undefined }), null, 'the main agent gets wakes');
+  assert.equal(moved({ command: 'x' }, 'not json'), null);
+});
+
+test('the check-in hook is off by default', () => {
+  const payload = { agent_id: 'a', tool_name: 'Bash', tool_input: { command: 'x' }, tool_response: { backgroundTaskId: 'b1' } };
+  assert.equal(run('poll-after-move.js', payload).stdout, '');
+  assert.equal(JSON.parse(run('poll-after-move.js', payload, { EMBER_SUBAGENT: '1' }).stdout).hookSpecificOutput.hookEventName, 'PostToolUse');
 });
 
 test('leaves the main agent, short waits, and background commands alone', () => {

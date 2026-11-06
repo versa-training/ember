@@ -4,7 +4,7 @@
 
 **Your coding agent's memory goes cold while it waits. ember keeps it warm, powered by [versa](https://versa.training)**
 
-<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.5.0-blue?style=flat-square" alt="version"></a>
+<a href="CHANGELOG.md"><img src="https://img.shields.io/badge/version-0.6.0-blue?style=flat-square" alt="version"></a>
 <a href="#find-out-what-it-costs-you"><img src="https://img.shields.io/badge/Claude_Code-plugin-d97757?style=flat-square" alt="Claude Code plugin"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT license"></a>
 
@@ -89,7 +89,7 @@ These numbers come from a real heavy multi-agent workload, the reference workloa
 - Dates: 2026-09-29 to 2026-11-05. The same requests and pauses are assumed in every row.
 - Expiries cost $4,468.12 on 5 minutes (33.0%, range 32.1% to 35.0% depending on the expiry assumption) and $1,448.41 on the actual setup (13.4%). Both are simulated.
 - Simulated keepalive on the actual setup, main agent wake only: net $300.03 ($224.46 if sessions are abandoned). Expiry plus wakes are then $1,148 of a $10,494 total (10.9%).
-- With subagent check-ins turned on as well: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned). The check-ins are $784.73 of that net. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it. The figure also leaves out the cost of denied calls, which is large: see [docs/benchmarks.md](docs/benchmarks.md).
+- With subagent check-ins turned on as well: cost $138.80, expiry avoided $1,223.56, net $1,084.76 ($1,009.19 if sessions are abandoned). The check-ins are $784.73 of that net. The subagent figure assumes check-ins that only a foreground Bash timeout above 270 seconds triggers. $120.76 of the $878.67 subagent expiry avoided has no such timeout, so the hook cannot act on it.
 - The report prints the 5-minute expiry cost as the row "Extra cost of expiries" under "Everything on 5 minutes".
 
 The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
@@ -98,11 +98,11 @@ The arithmetic: [docs/pricing-math.md](docs/pricing-math.md).
 
 ## What ember does
 
-Two small hooks. The wake hook is on. The subagent hook is off unless you set `EMBER_SUBAGENT=1`, because it also refuses many commands that would finish quickly.
+Small hooks, in two parts. The main agent wake is on. Subagent check-ins are off unless you set `EMBER_SUBAGENT=1`.
 
 | Hook | Who it helps | What it does |
 | --- | --- | --- |
-| Subagent hook, off by default | Subagents on a 5-minute cache | Long waits run in the background, and your subagent checks in under 4:30. On a 1-hour subagent cache the limit is 59 minutes |
+| Subagent check-ins, off by default | Subagents on a 5-minute cache | With `EMBER_SUBAGENT=1`, a command that runs past 4:30 moves to the background and your subagent checks on it about every 4 minutes. Shorter commands are not touched. Without it, nothing happens and the cache can expire during a long command |
 | Wake hook | Your main agent, on a 5-minute or 1-hour cache | A wake just before the cache expires (4:30 or 59 minutes), at most 4 between your prompts |
 
 **The biggest single win needs no plugin.** If you use an API key or a cloud provider, set `"promptCacheTtl": "1h"` in your settings. It needs Claude Code v2.1.242 or later. On the reference workload, it takes the total from $13,544.48 to $10,794.50 (simulated). The main agent wake adds less: a net $300.03 (simulated).
@@ -163,9 +163,9 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `EMBER_MAIN=0` | on | Turns off the Stop hook wakes |
-| `EMBER_SUBAGENT=1` | off | Turns on the subagent hook |
+| `EMBER_SUBAGENT=1` | off | Turns on subagent check-ins |
 | `EMBER_MAIN_TTL`, `EMBER_SUBAGENT_TTL` | unset | Test overrides of the resolved lifetime (`5m` or `1h`). Leave them unset |
-| `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | Longest foreground Bash timeout a subagent may use. Overrides exactly |
+| `EMBER_SUBAGENT_WAIT_MS` | from the lifetime: 270000 or 3540000 | With check-ins on, a longer foreground Bash timeout in a subagent is lowered to this. Overrides exactly |
 | `EMBER_MAIN_INTERVAL_SEC` | from the lifetime: 270 or 3540 | Seconds between wakes. Overrides exactly. Setting it skips the transcript wait, and a headless run may then wait for a pending sleeper before it exits |
 | `EMBER_MAX_WAKES` | 4 | Wakes allowed before the limit resets. A limit set with `/ember:wakes` wins for that session |
 | `EMBER_WAKE_MESSAGE` | `ember keepalive: ...` | Text of the wake turn |
@@ -183,19 +183,19 @@ Settings files, first match: `/etc/claude-code/managed-settings.json`, `<cwd>/.c
 
 ## How it works
 
-The subagent hook, when turned on, is a `PreToolUse` hook. It denies a foreground Bash timeout above the subagent's interval (270 seconds on a 5-minute cache) and tells the subagent to rerun in the background and keep polling. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
+Subagent check-ins, when turned on, are two hooks. A `PreToolUse` hook lowers a foreground Bash timeout above the subagent's interval to that interval (270 seconds on a 5-minute cache), because Claude Code does not move a command with a long declared timeout to the background. A `PostToolUse` hook sees the move and tells the subagent to keep checking on the command. Each check waits without using tokens, and the request after it refreshes the cache. The wake hook is a `Stop` hook with `asyncRewake`. It sleeps one interval (270 seconds or 59 minutes), then wakes the session for a one-word turn, which is a real turn in your transcript.
 
 <details>
 <summary>Hook details and test status</summary>
 
-**Subagent hook** (off by default)
+**Subagent check-ins** (off by default)
 
 - It does nothing when `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS` is set to a truthy value, because the instruction cannot be followed.
-- On a 1-hour subagent lifetime the limit is 3540 seconds, so it effectively never denies.
-- The deny text includes a polling command, because a call that starts with `sleep` is rejected by Claude Code and a subagent that ends its turn waits for the finish notification without a request.
+- On a 1-hour subagent lifetime the limit is 3540 seconds, so a timeout is almost never lowered.
+- The instruction includes the check command, because a call that starts with `sleep` is rejected by Claude Code and a subagent that ends its turn waits for the finish notification without a request. It sets a Bash timeout, because a check without one would itself move to the background at 120 seconds.
 - A foreground subagent that runs longer than the main agent's lifetime cannot be helped: the main agent is inside one turn, so no Stop hook fires and its cache expires.
-- It denies the call and does not shorten it, because a test showed a shortened timeout killed the command with exit code 143.
-- It judges the declared timeout, not how long the command runs, so a denied call often would have finished quickly. Each denial adds at least one request. The saving figures do not count this cost: see [docs/benchmarks.md](docs/benchmarks.md).
+- A command that goes past its timeout moves to the background and keeps running. No permission decision is set, so the normal permission check still applies.
+- A command you start with `run_in_background` gets no instruction, because it may be a long-lived service. After 24 checks the subagent stops checking, because one expiry costs as much as 24 refreshes.
 
 **Wake hook**
 
@@ -208,7 +208,6 @@ The subagent hook, when turned on, is a `PreToolUse` hook. It denies a foregroun
 **Tested.** Unit tests pass (`npm test`). The live tests below ran under the earlier name warmcache on the same code, against Claude Code:
 
 - `asyncRewake` woke a headless stream-json session on Claude Code 2.1.310 with a 12-second interval, and the wake limit held (2 wakes with a limit of 2, then none).
-- Subagent hook, 2.1.310, haiku, cap set to 5 seconds: a subagent asked to run `sleep 12; echo finished` with a long Bash timeout was denied, then reran the same command with `run_in_background: true` and read the output `finished`. One run.
 - A review confirmed that `claude plugin validate` passes, that `--plugin-dir` loads the plugin on 2.1.310, and that a wake fired and a limit of 1 held in a live headless run.
 - In one-shot `-p` mode the transcript at Stop lacked the current turn, so no sleeper started.
 - An interactive session with a short interval showed 4 wakes and the limit of 4 held. The UI displays each wake as "Stop hook feedback".
@@ -217,7 +216,6 @@ The subagent hook, when turned on, is a `PreToolUse` hook. It denies a foregroun
 **Live tests of 0.3.0.** Claude Code 2.1.310, haiku, headless stream-json, 5-minute lifetime, the real 270-second interval, one run each. Tables: `results` in the ember-test repository.
 
 - Main idle 17 minutes with a limit of 3: 3 wakes at 272, 271, and 271 seconds after the previous request, each a cache hit, then none. With `EMBER_MAIN=0`, no wake in 11 minutes.
-- Subagent, ember on: the foreground call with a 600000 ms timeout was denied. With the first two versions of the deny text the subagent reran in the background and then ended its turn, so its next request came 471 and 475 seconds later with a full rewrite. With the current text it polled with gaps of 241 and 238 seconds, all cache hits, and the task finished. Three runs, so this depends on the model following the text.
 - Subagent, `EMBER_SUBAGENT=0`: the foreground call ran 482 seconds and the next request rewrote the full context (cache read 0).
 - Main waiting on a background subagent: the main wake fired at 272 seconds as a cache hit while the subagent ran, and the finish notification woke the main agent normally. The idle background subagent expired its own cache (gap 353 seconds, full rewrite).
 - A foreground subagent longer than 5 minutes: the main agent's next request came 489 seconds later with a full rewrite, because no Stop hook fires during a turn.
@@ -228,10 +226,18 @@ The subagent hook, when turned on, is a `PreToolUse` hook. It denies a foregroun
 
 - `EMBER_MAX_WAKES=6` in the `env` block of the user settings: 6 wakes, then none.
 - A session told "I only want 2 wakes" used `/ember:wakes` and got 2 wakes, then none.
-- `EMBER_SUBAGENT=0` in the same `env` block: a subagent's foreground Bash call with a 600000 ms timeout ran without a denial.
+- `EMBER_SUBAGENT` unset: a subagent's foreground Bash call with a 600000 ms timeout ran unchanged.
 - Task notifications, `--plugin-dir`, interval 25 seconds, limit of 3: 3 wakes, a notification, then 3 more wakes.
 
-**Untested.** Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
+**Live tests of 0.6.0, subagent check-ins.** Haiku, headless stream-json, 5-minute subagent lifetime, `EMBER_SUBAGENT=1`, a 460 to 560 second command, one run each.
+
+- Foreground subagent on 2.1.310, background subagent on 2.1.310, and foreground subagent on 2.1.318, all with a 600000 ms timeout: the command moved at 270 seconds, the subagent checked until it ended, the longest gap was 273 seconds, and every request after a gap was a cache hit.
+- No declared timeout on 2.1.310: the command moved at 120 seconds, the longest gap was 243 seconds, all cache hits.
+- A 20-second command with a 600000 ms timeout: returned normally, with no move and no check.
+- Control with the hooks off: the 600000 ms call ran 560 seconds and the next request rewrote the context. With no timeout, the command moved at 120 seconds, the subagent went idle, and after a 434-second gap the next request read 0 from the cache.
+- Before this design: with 0.3.0 the hook refused long timeouts, and that cost a request on every refused call.
+
+**Untested.** Subagent check-ins in an interactive session, and past 24 checks. Laptop suspend, `/clear` with a pending sleeper, an interactive session at the 270-second interval (the launch was blocked by this machine's agent tooling), the real 59-minute interval, and a settings change made while a live Claude Code session ran.
 
 </details>
 

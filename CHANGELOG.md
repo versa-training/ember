@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- Subagent check-ins no longer refuse commands. With `EMBER_SUBAGENT=1`, a foreground Bash timeout above the subagent's interval is lowered to it, so a long command moves to the background and a short command costs nothing. A new `PostToolUse` hook, `hooks/poll-after-move.js`, then tells the subagent to keep checking until the command ends.
+
 ## 0.5.0
 
 - The subagent hook is off by default. `EMBER_SUBAGENT=1` turns it on. It judges a command by its declared timeout, so it refused many commands that would have finished quickly, and each refusal costs a request.

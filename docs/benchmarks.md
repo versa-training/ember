@@ -27,7 +27,7 @@ Flags: `--days N` (default 30, 0 reads everything and can take minutes on large 
 2. Agents by pauses: a pause is 5 to 60 minutes between two requests of one agent. Agents with 0 pauses never benefit from a longer lifetime. Agents with 4 or more pauses benefit most.
 3. Pauses by length: short pauses (5 to 10 minutes) favor a 5-minute check-in. Long ones favor 1 hour.
 4. Cost per mode: the simulated total for each mode, then the saving against actual in dollars and percent. A negative saving means the mode costs more than what you did.
-5. Share the hook cannot reach: the part of simulated subagent expiry cost on gaps that were not preceded by a foreground Bash call with a timeout above 270 seconds. The subagent hook only acts on such calls, so the check-in row is an upper bound.
+5. Share the hook cannot reach: the part of simulated subagent expiry cost on gaps that were not preceded by a foreground Bash call with a timeout above 270 seconds. The check-in row assumes every gap is reachable. The share is an estimate: a command with no declared timeout can also move and get checks, and a subagent idle for another reason gets none.
 
 Every figure is simulated at API list prices. On a subscription, dollars are an equivalent, not a bill.
 
@@ -43,5 +43,5 @@ The simulated wake rows use the plugin defaults: an interval of 270 seconds on a
 - Models without a listed price are skipped and listed.
 - Prices and cache behavior change on Anthropic's side. Record your Claude Code version (`check-env.js`) and the date with any result you share.
 - A pause of 5 to 60 minutes between requests counts whether the agent was waiting for a person or a tool.
-- The subagent check-in row leaves out the cost of denied calls. The hook denies by declared timeout, so it also denies commands that would finish quickly, and each denial adds at least one request. On the reference workload, 38 days to 2026-11-06, subagents made 14,202 foreground Bash calls with a timeout above 270 seconds, and 13.6% ran that long (measured). One extra context read per denied call costs $403.96 at API list prices, against a simulated saving of $790.03. If your commands declare long timeouts as a habit, turn the hook off with `EMBER_SUBAGENT=0`.
+- The subagent check-in row needs `EMBER_SUBAGENT=1`, and it depends on the subagent following the instruction to keep checking.
 - Savings can come in bursts. On the same workload one week of the 38 held 44% of the subagent pauses, so a short `--days` window can differ a lot from a long one.
